@@ -85,9 +85,16 @@ async function ensureAttribute(collectionId, attr) {
   const collection = await databases.getCollection({ databaseId: DATABASE_ID, collectionId });
   if (collection.attributes?.some((a) => a.key === attr.key)) return;
   try {
-    if (attr.type === "string") await databases.createStringAttribute({ databaseId: DATABASE_ID, collectionId, key: attr.key, size: attr.size || 255, required: Boolean(attr.required), default: attr.default ?? null });
-    if (attr.type === "integer") await databases.createIntegerAttribute({ databaseId: DATABASE_ID, collectionId, key: attr.key, required: Boolean(attr.required), min: attr.min, max: attr.max, default: attr.default ?? null });
-    if (attr.type === "datetime") await databases.createDatetimeAttribute({ databaseId: DATABASE_ID, collectionId, key: attr.key, required: Boolean(attr.required), default: attr.default ?? null });
+    const base = { databaseId: DATABASE_ID, collectionId, key: attr.key, required: Boolean(attr.required) };
+    if (attr.default !== undefined) base.default = attr.default;
+    if (attr.type === "string") await databases.createStringAttribute({ ...base, size: attr.size || 255 });
+    if (attr.type === "integer") {
+      if (attr.min !== undefined) base.min = attr.min;
+      if (attr.max !== undefined) base.max = attr.max;
+      await databases.createIntegerAttribute(base);
+    }
+    if (attr.type === "datetime") await databases.createDatetimeAttribute(base);
+    await new Promise((resolve) => setTimeout(resolve, 250));
   } catch (error) {
     if (Number(error?.code || 0) !== 409) throw error;
   }
