@@ -66,6 +66,24 @@ let aboutTimer = null;
 let aboutKickTimers = [];
 let activeSince = null;
 
+function loadActiveSince() {
+  try {
+    const filePath = path.join(SESSION_DIR, "axynera-active.json");
+    if (fs.existsSync(filePath)) {
+      const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+      const value = Number(data?.activeSince);
+      if (Number.isFinite(value) && value > 0) activeSince = value;
+    }
+  } catch {}
+}
+
+function saveActiveSince() {
+  try {
+    fs.mkdirSync(SESSION_DIR, { recursive: true });
+    fs.writeFileSync(path.join(SESSION_DIR, "axynera-active.json"), JSON.stringify({ activeSince }), "utf8");
+  } catch {}
+}
+
 // Guard krusial: mencegah dua connectWhatsApp() berjalan bersamaan.
 // Tanpa ini, close-event yang beruntun (mis. karena conflict) bisa memicu
 // beberapa makeWASocket() sekaligus memakai sesi yang sama -> saling bentrok -> conflict lagi.
@@ -334,6 +352,7 @@ async function connectWhatsApp() {
     } catch (error) {
       pushConsoleLog("appwrite_error", { error: error.message });
     }
+    loadActiveSince();
     await loadPlugins();
     if (!pluginTimer) pluginTimer = setInterval(() => void loadPlugins(), PLUGIN_RELOAD_MS).unref();
 
@@ -436,7 +455,7 @@ async function connectWhatsApp() {
           about: null,
           aboutLastSuccessAt: null
         });
-        if (!activeSince) activeSince = Date.now();
+        if (!activeSince) { activeSince = Date.now(); saveActiveSince(); }
         startLiveProfileTimers();
         pushConsoleLog("connection", { status: "connected", text: "WhatsApp terhubung" });
       }
@@ -491,6 +510,7 @@ export async function logoutWhatsApp() {
   try { fs.rmSync(SESSION_DIR, { recursive: true, force: true }); } catch {}
   setState({ status: "logged_out", qr: null, qrDataUrl: null, phone: null, connectedAt: null, about: null, aboutLastSuccessAt: null });
   activeSince = null;
+  try { fs.rmSync(path.join(SESSION_DIR, "axynera-active.json"), { force: true }); } catch {}
   pushConsoleLog("connection", { status: "logged_out", text: "Session WhatsApp dihapus" });
   reconnectAttempts = 0;
   scheduleReconnect();
