@@ -154,6 +154,13 @@ function consolePage() {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", "http://localhost"); const p = url.pathname;
   try {
+    if (req.method === "GET" && p === "/health") {
+      return send(res, 200, { ok: true, service: "axynera-botwa", status: getWhatsAppState().status, uptime: process.uptime(), ts: Date.now() });
+    }
+    if (req.method === "GET" && p === "/ping") {
+      res.writeHead(204, { "cache-control": "no-store" });
+      return res.end();
+    }
     if (req.method === "POST" && p === "/login") {
       const body = await readJson(req);
       if (!WEB_PASSWORD || String(body.username || "") !== WEB_USERNAME || String(body.password || "") !== WEB_PASSWORD) return send(res, 401, { error: "Username atau password salah." });
