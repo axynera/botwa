@@ -64,6 +64,7 @@ let reconnectTimer = null;
 let presenceTimer = null;
 let aboutTimer = null;
 let aboutKickTimers = [];
+let activeSince = null;
 
 // Guard krusial: mencegah dua connectWhatsApp() berjalan bersamaan.
 // Tanpa ini, close-event yang beruntun (mis. karena conflict) bisa memicu
@@ -133,7 +134,7 @@ async function updateOnlinePresence() {
 
 async function updateDynamicAbout(force = false) {
   if (!sock || state.status !== "connected" || !state.connectedAt) return false;
-  const about = `${ABOUT_PREFIX} ${formatUptime(state.connectedAt)}`;
+  const about = `${ABOUT_PREFIX} ${formatUptime(activeSince || state.connectedAt)}`;
   const lastSuccess = Number(state.aboutLastSuccessAt || 0);
   const shouldForce = force || !lastSuccess || Date.now() - lastSuccess >= ABOUT_FORCE_REFRESH_MS;
   if (!shouldForce && about === state.about) return true;
@@ -435,6 +436,7 @@ async function connectWhatsApp() {
           about: null,
           aboutLastSuccessAt: null
         });
+        if (!activeSince) activeSince = Date.now();
         startLiveProfileTimers();
         pushConsoleLog("connection", { status: "connected", text: "WhatsApp terhubung" });
       }
@@ -488,6 +490,7 @@ export async function logoutWhatsApp() {
   await teardownSocket("logout");
   try { fs.rmSync(SESSION_DIR, { recursive: true, force: true }); } catch {}
   setState({ status: "logged_out", qr: null, qrDataUrl: null, phone: null, connectedAt: null, about: null, aboutLastSuccessAt: null });
+  activeSince = null;
   pushConsoleLog("connection", { status: "logged_out", text: "Session WhatsApp dihapus" });
   reconnectAttempts = 0;
   scheduleReconnect();
