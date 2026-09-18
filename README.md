@@ -247,10 +247,30 @@ start.js               bootstrap Axynera session path
 sdk-compat.js          web server, QR, Plugin Manager, Live Console, health/uptime
 whatsapp-bot.js        Baileys, auto-read, presence, media, reconnect, plugin loader
 live-console.js        ring buffer Live Console
-wa-plugins/
+plugins/               folder untuk plugin yang akan di-upload
+└── README.md
+wa-plugins/             runtime plugin directory
 ├── ping.js
-└── ai-chat.js         Nera SSE + mode + memory per LID/JID
+└── ai-chat.js           Nera SSE + mode + memory per LID/JID
 ```
+
+### 🧩 Folder plugin
+
+Folder `plugins/` disediakan sebagai tempat upload plugin baru. Kamu bisa menambahkan plugin `.js` atau `.mjs` di sana.
+
+Alur pesan yang direncanakan:
+
+```text
+User chat
+   ↓
+Cek plugin
+   ↓
+Ada plugin yang menangani? ── Ya → jalankan plugin → selesai
+   │
+   └── Tidak → AI chat + thinking system → balas
+```
+
+Dispatcher tidak menggunakan regex untuk menentukan apakah pesan harus masuk plugin atau AI. Plugin mendapat kesempatan menangani pesan terlebih dahulu, sedangkan AI menjadi fallback untuk pesan yang tidak ditangani plugin.
 
 ## 🔒 Keamanan
 
