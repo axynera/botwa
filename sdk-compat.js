@@ -9,7 +9,7 @@ import { listUsers, updateUser, deleteUser, uploadPluginFile, deletePluginFile, 
 const PORT = Number(process.env.PORT || 8000);
 const HOST = process.env.HOST || "0.0.0.0";
 const startedAt = Date.now();
-const PLUGIN_DIR = path.resolve(process.env.WA_PLUGIN_DIR || "./wa-plugins");
+const PLUGIN_DIR = path.resolve(process.env.WA_PLUGIN_DIR || "./plugins");
 const WEB_USERNAME = String(process.env.WA_WEB_USERNAME || "admin").trim();
 const WEB_PASSWORD = String(process.env.WA_WEB_PASSWORD || "").trim();
 const WEB_SESSION_TTL_MS = Number(process.env.WA_WEB_SESSION_TTL_MS || 86400000);
