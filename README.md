@@ -13,8 +13,8 @@ Runtime WhatsApp berbasis **Baileys** dengan QR login, session persistent, auto-
 - 🖼️ Auto-download gambar masuk
 - 🧩 Plugin `.js` / `.mjs` dengan hot reload
 - 🖥️ Live Console
-- 🔐 Plugin Manager + Console dilindungi `WA_ADMIN_KEY`
-- 🤖 Nera API: `https://api.axynera.my.id/v1/chat/completions`
+- 🔐 Web Admin, Plugin Manager, User Manager, dan Console dilindungi login web
+- 🤖 Axynity API: `https://api.axynera.my.id/v1/chat/completions`
 - ⚡ Mode `.mode cepat`
 - 🧠 Mode `.mode pintar`
 - 🌊 SSE `stream:true` lalu pesan WhatsApp diedit berkala
@@ -30,8 +30,6 @@ Jangan menyimpan API key asli di GitHub.
 ```env
 PORT=8000
 HOST=0.0.0.0
-
-WA_ADMIN_KEY=ganti-dengan-key-admin-yang-kuat
 
 # WhatsApp
 WA_AUTO_READ=true
@@ -53,16 +51,16 @@ WA_ABOUT_UPDATE_MS=60000
 WA_ABOUT_PREFIX=🤖 Axynera Ai⌚ Aktif
 
 # Nera AI
-NERA_AI_BASE_URL=https://api.axynera.my.id
-NERA_AI_MODEL=Nera-Plus.5
-NERA_AI_DEFAULT_MODE=cepat
-NERA_AI_TIMEOUT_MS=120000
-NERA_AI_STREAM_EDIT_MS=1200
-NERA_AI_API_KEY=
+AXYNITY_BASE_URL=https://api.axynera.my.id
+AXYNITY_MODEL=Nera-Plus.5
+AXYNITY_DEFAULT_MODE=cepat
+AXYNITY_TIMEOUT_MS=120000
+AXYNITY_STREAM_EDIT_MS=1200
+AXYNITY_API_KEY=
 
 # Memory
-NERA_AI_MEMORY_TURNS=20
-# NERA_AI_MEMORY_FILE=/data/axynera-wa-session/nera-memory.json
+AXYNITY_MEMORY_TURNS=20
+# AXYNITY_MEMORY_FILE=/data/axynera-wa-session/nera-memory.json
 
 BODY_LIMIT_BYTES=2097152
 KEEP_ALIVE_TIMEOUT_MS=75000
@@ -70,7 +68,7 @@ KEEP_ALIVE_TIMEOUT_MS=75000
 
 > Jika environment Koyeb masih memiliki variable lama, nilai Koyeb akan mengalahkan `.env.example`. Hapus variable `NEXTURA_AI_*` lama dan gunakan hanya `NERA_AI_*` di atas.
 
-## 🤖 Request Nera
+## 🤖 Request Axynity
 
 Bot memakai endpoint:
 
@@ -116,23 +114,23 @@ Bot memprioritaskan identitas WhatsApp **LID** bila tersedia, lalu melakukan fal
 Default maksimum:
 
 ```env
-NERA_AI_MEMORY_TURNS=20
+AXYNITY_MEMORY_TURNS=20
 ```
 
 Artinya konteks terbaru dibatasi agar request AI tidak membesar tanpa batas.
 
 ## 🌊 SSE di WhatsApp
 
-Nera tetap memakai SSE nyata di backend. WhatsApp tidak menampilkan token stream secara native, sehingga bot membuat efek streaming dengan cara:
+Axynity tetap memakai SSE nyata di backend. WhatsApp tidak menampilkan token stream secara native, sehingga bot membuat efek streaming dengan cara:
 
 ```text
-Nera SSE → kumpulkan delta → edit satu pesan WhatsApp berkala → jawaban final
+Axynity SSE → kumpulkan delta → edit satu pesan WhatsApp berkala → jawaban final
 ```
 
 Interval edit default:
 
 ```env
-NERA_AI_STREAM_EDIT_MS=1200
+AXYNITY_STREAM_EDIT_MS=1200
 ```
 
 Jawaban final yang lengkap saja yang disimpan ke memory.
@@ -331,4 +329,4 @@ Default penting:
 - Web password: `change-this-password` — **wajib diganti sebelum public**
 - Plugin directory: `/app/plugins`
 - Port: `8000` (Koyeb dapat meng-override lewat `PORT`)
-- Nera AI: sudah memiliki base URL dan model default
+- Axynity AI: sudah memiliki base URL dan model default
