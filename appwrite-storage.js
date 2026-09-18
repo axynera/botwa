@@ -304,7 +304,7 @@ export async function uploadTemporaryBuffer(buffer, name, ttlMs = 15 * 60 * 1000
   const file = await storage.createFile({
     bucketId: BUCKET_ID,
     fileId: ID.unique(),
-    file: InputFile.fromBuffer(buffer, safe),
+    file: new File([buffer], safe),
     folder: "temp"
   });
 
