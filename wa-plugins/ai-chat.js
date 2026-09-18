@@ -98,7 +98,8 @@ function getIdentity(message) {
 
 function newSession(info) {
   const now = Date.now();
-  return { id: randomUUID(), identity: info.identity, chatJids: [...new Set([info.chatJid, info.identity].filter(Boolean))], groupJid: info.groupJid, messages: [], createdAt: now, updatedAt: now };
+  const defaultMode = String(process.env.AXYNITY_DEFAULT_MODE || "cepat").trim() || "cepat";
+  return { id: randomUUID(), identity: info.identity, chatJids: [...new Set([info.chatJid, info.identity].filter(Boolean))], groupJid: info.groupJid, mode: defaultMode, messages: [], createdAt: now, updatedAt: now };
 }
 function getSession(info) {
   if (!store.sessions[info.key]) { store.sessions[info.key] = newSession(info); saveStore(); }
@@ -347,9 +348,10 @@ function safeHttpError(status, body, contentType) {
   } catch {}
   const e = new Error(`Axynity API HTTP ${status}.`); e.status = status; return e;
 }
-async function doAxynityRequest({ baseUrl, model, messages, apiKey, timeoutMs, stream = true, includeModel = true }) {
+async function doAxynityRequest({ baseUrl, model, mode, messages, apiKey, timeoutMs, stream = true, includeModel = true }) {
   const payloadMessages = messages[0]?.role === "system" ? messages : [SYSTEM_PROMPT, ...messages];
   const payload = { stream, messages: payloadMessages };
+  if (mode) payload.mode = mode;
   if (includeModel && model) payload.model = model;
   return fetch(`${baseUrl}/v1/chat/completions`, {
     method: "POST",
@@ -378,7 +380,7 @@ async function parseNonStreamResponse(r, { log, jid, sessionId, model }) {
   return answer;
 }
 
-async function askAxynityStream({ messages, log, jid, sessionId, hasImage, onVisibleText, onThinking }) {
+async function askAxynityStream({ messages, log, jid, sessionId, hasImage, mode, onVisibleText, onThinking }) {
   const baseUrl = String(process.env.AXYNITY_BASE_URL || process.env.NERA_AI_BASE_URL || "http://170.39.194.189:4123").replace(/\/+$/, "");
   const model = String(process.env.AXYNITY_MODEL || process.env.NERA_AI_MODEL || "axynity").trim() || "axynity";
 
@@ -389,11 +391,11 @@ async function askAxynityStream({ messages, log, jid, sessionId, hasImage, onVis
   const timeoutMs = hasImage ? IMAGE_TIMEOUT_MS : TEXT_TIMEOUT_MS;
   log?.("ai_request", { jid, sessionId, model, stream: true, hasImage, timeoutMs, historyMessages: Math.max(0, messages.length - 1) });
 
-  let r = await doAxynityRequest({ baseUrl, model, messages, apiKey: AXYNITY_API_KEY, timeoutMs, stream: true, includeModel: true });
+  let r = await doAxynityRequest({ baseUrl, model, mode, messages, apiKey: AXYNITY_API_KEY, timeoutMs, stream: true, includeModel: true });
   if (r.status === 403) {
     const b = await r.text().catch(() => "");
     log?.("ai_403", { jid, sessionId, withModel: true, contentType: r.headers.get("content-type") || "", body: b.slice(0, 1200) });
-    r = await doAxynityRequest({ baseUrl, model, messages, apiKey: AXYNITY_API_KEY, timeoutMs, stream: true, includeModel: false });
+    r = await doAxynityRequest({ baseUrl, model, mode, messages, apiKey: AXYNITY_API_KEY, timeoutMs, stream: true, includeModel: false });
   }
 
   if (!r.ok || (r.headers.get("content-type") || "").toLowerCase().includes("text/html")) {
@@ -401,11 +403,11 @@ async function askAxynityStream({ messages, log, jid, sessionId, hasImage, onVis
     const ct = r.headers.get("content-type") || "";
     log?.("ai_stream_fallback", { jid, sessionId, status: r.status, contentType: ct, html: isHtml(b, ct), body: b.slice(0, 1600) });
 
-    let fallback = await doAxynityRequest({ baseUrl, model, messages, apiKey: AXYNITY_API_KEY, timeoutMs, stream: false, includeModel: true });
+    let fallback = await doAxynityRequest({ baseUrl, model, mode, messages, apiKey: AXYNITY_API_KEY, timeoutMs, stream: false, includeModel: true });
     if (fallback.status === 403) {
       const fb = await fallback.text().catch(() => "");
       log?.("ai_nonstream_403", { jid, sessionId, withModel: true, body: fb.slice(0, 1200) });
-      fallback = await doAxynityRequest({ baseUrl, model, messages, apiKey: AXYNITY_API_KEY, timeoutMs, stream: false, includeModel: false });
+      fallback = await doAxynityRequest({ baseUrl, model, mode, messages, apiKey: AXYNITY_API_KEY, timeoutMs, stream: false, includeModel: false });
     }
     const answer = await parseNonStreamResponse(fallback, { log, jid, sessionId, model });
     onVisibleText?.(answer);
@@ -475,6 +477,20 @@ export default async function axynityPlugin({ sock, message, media, log }) {
     saveStore();
   }
 
+  if (!hasImage && /^(?:\\.mode|mode)(?:\\s+(cepat|pintar))?$/i.test(raw)) {
+    const requested = raw.match(/(?:^|\\s)(cepat|pintar)$/i)?.[1]?.toLowerCase();
+    if (!requested) {
+      const current = session.mode || process.env.AXYNITY_DEFAULT_MODE || "cepat";
+      await sock.sendMessage(jid, { text: `🧠 Mode Axynity saat ini: *${current}*\\nGunakan *.mode cepat* atau *.mode pintar*.` }, { quoted: message });
+      return true;
+    }
+    session.mode = requested;
+    session.updatedAt = Date.now();
+    saveStore();
+    await sock.sendMessage(jid, { text: `✅ Mode Axynity diubah ke *${requested}*.` }, { quoted: message });
+    return true;
+  }
+
   // SMART AI REACTION: AI membaca konteks chat dan memilih reaksi yang paling sesuai.
   // Tidak memakai keyword/regex untuk menentukan emosi.
   const reactionEnabled = String(process.env.AXYNITY_AUTO_REACTION || "true").toLowerCase() !== "false";
@@ -499,7 +515,8 @@ ${raw}`
         log,
         jid,
         sessionId: "auto-reaction",
-        hasImage: false
+        hasImage: false,
+        mode: session.mode || process.env.AXYNITY_DEFAULT_MODE || "cepat"
       });
       const value = String(detected || "").trim();
       const allowed = ["👍","😂","😢","😡","😲","🔥","😭","🤣","😎","🥺","😅","🤔","❤️","💔","🎉","🙏","👀","🤯"];
@@ -657,7 +674,8 @@ ${raw}`
           log,
           jid,
           sessionId: "sticker-make-comment",
-          hasImage: true
+          hasImage: true,
+          mode: session.mode || process.env.AXYNITY_DEFAULT_MODE || "cepat"
         });
 
         stopAnim();
