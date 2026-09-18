@@ -1,4 +1,5 @@
-import http from "node:http";
+import crypto from "node:crypto";
+simport http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { getWhatsAppState, restartWhatsApp, logoutWhatsApp } from "./whatsapp-bot.js";
@@ -10,6 +11,10 @@ const HOST = process.env.HOST || "0.0.0.0";
 const startedAt = Date.now();
 const PLUGIN_DIR = path.resolve(process.env.WA_PLUGIN_DIR || "./wa-plugins");
 const ADMIN_KEY = String(process.env.WA_ADMIN_KEY || "").trim();
+const WEB_USERNAME = String(process.env.WA_WEB_USERNAME || "admin").trim();
+const WEB_PASSWORD = String(process.env.WA_WEB_PASSWORD || "").trim();
+const WEB_SESSION_TTL_MS = Number(process.env.WA_WEB_SESSION_TTL_MS || 86400000);
+const webSessions = new Map();
 const BODY_LIMIT = Number(process.env.BODY_LIMIT_BYTES || 2 * 1024 * 1024);
 
 function send(res, status, data) {
@@ -28,14 +33,25 @@ async function readJson(req) {
   const text = Buffer.concat(chunks).toString("utf8");
   return text ? JSON.parse(text) : {};
 }
-function adminAuthorized(req, url) {
-  if (!ADMIN_KEY) return false;
-  return String(req.headers["x-admin-key"] || url.searchParams.get("key") || "").trim() === ADMIN_KEY;
+function parseCookies(req) {
+  return Object.fromEntries(String(req.headers.cookie || "").split(";").map(x => x.trim()).filter(Boolean).map(x => {
+    const i = x.indexOf("="); return i < 0 ? [x, ""] : [x.slice(0, i), decodeURIComponent(x.slice(i + 1))];
+  }));
+}
+function webAuthorized(req) {
+  const token = parseCookies(req).axynera_session;
+  if (!token) return false;
+  const session = webSessions.get(token);
+  if (!session || session.expiresAt < Date.now()) { webSessions.delete(token); return false; }
+  return true;
 }
 function requireAdmin(req, res, url) {
-  if (!ADMIN_KEY) { send(res, 503, { error: "WA_ADMIN_KEY belum disetel di environment." }); return false; }
-  if (!adminAuthorized(req, url)) { send(res, 401, { error: "Admin key tidak valid." }); return false; }
+  if (!WEB_PASSWORD) { send(res, 503, { error: "WA_WEB_PASSWORD belum disetel di environment." }); return false; }
+  if (!webAuthorized(req)) { send(res, 401, { error: "Login diperlukan." }); return false; }
   return true;
+}
+function loginPage() {
+  return \`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Axynera Login</title><style>\${css()}body{min-height:100vh;display:grid;place-items:center}.login{width:min(420px,100%);padding:28px;background:#0d1d14;border:1px solid #244b36;border-radius:24px;box-shadow:0 20px 60px #0008}input{width:100%;margin:8px 0 12px}button{width:100%}.logo{font-size:38px;margin-bottom:8px}</style></head><body><main class="login"><div class="logo">🤖</div><h1>Axynera BotWA</h1><p class="muted">Admin Control Center</p><form onsubmit="login(event)"><input id="u" autocomplete="username" placeholder="Username" required><input id="p" type="password" autocomplete="current-password" placeholder="Password" required><button>Login</button></form><div id="m" class="msg"></div></main><script>async function login(e){e.preventDefault();m.textContent='Memeriksa…';const r=await fetch('/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({username:u.value,password:p.value})});const d=await r.json();if(r.ok)location.href='/wa';else m.textContent=d.error||'Login gagal'}</script></body></html>\`;
 }
 function safePluginName(value) {
   const name = path.basename(String(value || "").trim());
@@ -142,14 +158,26 @@ function consolePage() {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", "http://localhost"); const p = url.pathname;
   try {
-    if (req.method === "GET" && p === "/") return sendHtml(res, `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>${css()}</style></head><body><div class="wrap">${nav()}<div class="panel"><h1>Axynera WhatsApp Bot</h1><p>Baileys + Nera SSE + memory + image-ready + Plugin Studio.</p></div></div></body></html>`);
-    if (req.method === "GET" && p === "/wa") return sendHtml(res, whatsappPage());
-    if (req.method === "GET" && p === "/plugins") return sendHtml(res, pluginManagerPage());
-    if (req.method === "GET" && p === "/users") return sendHtml(res, usersPage());
-    if (req.method === "GET" && p === "/console") return sendHtml(res, consolePage());
-    if (req.method === "GET" && p === "/wa/status") return send(res, 200, getWhatsAppState());
-    if (req.method === "POST" && p === "/wa/restart") return send(res, 200, await restartWhatsApp());
-    if (req.method === "POST" && p === "/wa/logout") return send(res, 200, await logoutWhatsApp());
+    if (req.method === "POST" && p === "/login") {
+      const body = await readJson(req);
+      if (!WEB_PASSWORD || String(body.username || "") !== WEB_USERNAME || String(body.password || "") !== WEB_PASSWORD) return send(res, 401, { error: "Username atau password salah." });
+      const token = crypto.randomUUID();
+      webSessions.set(token, { expiresAt: Date.now() + WEB_SESSION_TTL_MS });
+      res.writeHead(200, { "content-type": "application/json", "set-cookie": `axynera_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor(WEB_SESSION_TTL_MS / 1000)}`, "cache-control": "no-store" });
+      return res.end(JSON.stringify({ ok: true }));
+    }
+    if (req.method === "POST" && p === "/logout") {
+      const token = parseCookies(req).axynera_session; if (token) webSessions.delete(token);
+      res.writeHead(200, { "content-type": "application/json", "set-cookie": "axynera_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0" }); return res.end(JSON.stringify({ ok: true }));
+    }
+    if (req.method === "GET" && p === "/") { if (!webAuthorized(req)) return sendHtml(res, loginPage()); return sendHtml(res, `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>${css()}</style></head><body><div class="wrap">${nav()}<div class="panel"><h1>Axynera WhatsApp Bot</h1><p>Baileys + Nera SSE + memory + image-ready + Plugin Studio.</p></div></div></body></html>`); }
+    if (req.method === "GET" && p === "/wa") { if (!webAuthorized(req)) return sendHtml(res, loginPage()); return sendHtml(res, whatsappPage()); }
+    if (req.method === "GET" && p === "/plugins") { if (!webAuthorized(req)) return sendHtml(res, loginPage()); return sendHtml(res, pluginManagerPage()); }
+    if (req.method === "GET" && p === "/users") { if (!webAuthorized(req)) return sendHtml(res, loginPage()); return sendHtml(res, usersPage()); }
+    if (req.method === "GET" && p === "/console") { if (!webAuthorized(req)) return sendHtml(res, loginPage()); return sendHtml(res, consolePage()); }
+    if (req.method === "GET" && p === "/wa/status") { if (!requireAdmin(req,res,url)) return; return send(res, 200, getWhatsAppState()); }
+    if (req.method === "POST" && p === "/wa/restart") { if (!requireAdmin(req,res,url)) return; return send(res, 200, await restartWhatsApp()); }
+    if (req.method === "POST" && p === "/wa/logout") { if (!requireAdmin(req,res,url)) return; return send(res, 200, await logoutWhatsApp()); }
 
     if (p === "/api/users") {
       if (!requireAdmin(req, res, url)) return;
