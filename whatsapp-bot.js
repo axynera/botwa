@@ -199,7 +199,7 @@ async function downloadIncomingImage(message) {
 async function loadPlugins() {
   try {
     fs.mkdirSync(PLUGIN_DIR, { recursive: true });
-    const files = fs.readdirSync(PLUGIN_DIR).filter((f) => f.endsWith(".js") || f.endsWith(".mjs"));
+    const files = fs.readdirSync(PLUGIN_DIR).filter((f) => f.endsWith(".js") || f.endsWith(".mjs")).sort((a, b) => {\n      if (a === "sticker.js") return -1;\n      if (b === "sticker.js") return 1;\n      return a.localeCompare(b);\n    });
     const loaded = [];
     for (const file of files) {
       try {
@@ -233,13 +233,16 @@ async function dispatchPlugins(message, media = null) {
   if (!sock || !message?.message) return;
   for (const plugin of plugins) {
     try {
-      await plugin.handler({
+      const handled = await plugin.handler({
         sock,
         message,
         media,
         state: getWhatsAppState,
         log: (type, payload = {}) => pushConsoleLog(type, { plugin: plugin.name, ...payload })
       });
+      // Plugin dapat mengklaim message agar plugin berikutnya tidak ikut memproses.
+      // Ini mencegah command sticker/media bertabrakan dengan AI chat.
+      if (handled === true) break;
     } catch (error) {
       console.error(`[wa-plugin] ${plugin.name} error:`, error.message);
       pushConsoleLog("plugin_error", { plugin: plugin.name, error: error.message });
