@@ -29,6 +29,7 @@ const PRESENCE_INTERVAL_MS = Math.max(30000, Number(process.env.WA_PRESENCE_INTE
 const ABOUT_UPDATE_MS = Math.max(60000, Number(process.env.WA_ABOUT_UPDATE_MS || 60000));
 const ABOUT_FORCE_REFRESH_MS = Math.max(120000, Number(process.env.WA_ABOUT_FORCE_REFRESH_MS || 300000));
 const ABOUT_PREFIX = String(process.env.WA_ABOUT_PREFIX || "🤖 Axynera Ai⌚ Aktif").trim();
+const AI_DISPLAY_NAME = String(process.env.AI_DISPLAY_NAME || "Axynity").trim() || "Axynity";
 
 // Baileys default query timeout terlalu ketat untuk hosting dengan latency tinggi ke server WA.
 // Ini yang menyebabkan "unexpected error in 'init queries'" (fetchProps timeout) di awal koneksi.
@@ -393,9 +394,10 @@ async function connectWhatsApp() {
         const jid = message?.key?.remoteJid || "";
         const text = String(getText(message)).trim();
         const fromMe = Boolean(message?.key?.fromMe);
-        pushConsoleLog(fromMe ? "wa_out" : "wa_in", {
+        pushConsoleLog(fromMe ? "ai_response" : "wa_in", {
           jid,
           contact: jidLabel(jid),
+          aiName: fromMe ? AI_DISPLAY_NAME : null,
           upsertType: type || null,
           text: text || `[${Object.keys(message.message || {})[0] || "message"}]`
         });
