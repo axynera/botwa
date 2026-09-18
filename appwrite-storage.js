@@ -357,7 +357,7 @@ export async function restoreSession() {
 export async function uploadPluginFile(content, name) {
   if (!storage) throw new Error("Appwrite storage belum siap.");
   const safe = String(name || "").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
-  if (!/^[a-zA-Z0-9._-]+\\.(?:js|mjs)$/.test(safe)) throw new Error("Nama plugin tidak valid.");
+  if (!/^[a-zA-Z0-9._-]+\.(?:js|mjs)$/.test(safe)) throw new Error("Nama plugin tidak valid.");
   return uploadBuffer(Buffer.from(String(content || ""), "utf8"), safe, "plugins");
 }
 
