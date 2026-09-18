@@ -48,8 +48,19 @@ async function listFolder(folder) {
 }
 
 async function findFile(folder, name) {
-  const files = await listFolder(folder);
-  return files.find((f) => f.name === name) || null;
+  // Folder listing can be inconsistent across Appwrite versions. For named
+  // persistent files (especially the WhatsApp session), search by filename
+  // directly and use the folder only as a secondary filter.
+  const result = await storage.listFiles({
+    bucketId: BUCKET_ID,
+    queries: [Query.equal("name", [name]), Query.limit(100)]
+  });
+  const files = result.files || [];
+  return files.find((file) => {
+    const fileFolder = String(file?.folder || "").replace(/^\\/+|\\/+$/g, "");
+    const wantedFolder = String(folder || "").replace(/^\\/+|\\/+$/g, "");
+    return file.name === name && (!fileFolder || fileFolder === wantedFolder);
+  }) || files.find((file) => file.name === name) || null;
 }
 
 async function removeFile(file) {
@@ -61,14 +72,17 @@ async function uploadBuffer(buffer, name, folder) {
   if (!storage) throw new Error("Appwrite Storage belum siap.");
   if (!Buffer.isBuffer(buffer)) buffer = Buffer.from(buffer);
   const old = await findFile(folder, name);
-  if (old) await removeFile(old);
   try {
-    return await storage.createFile({
+    // Upload first, delete the previous copy only after the new upload succeeds.
+    // This prevents a transient Appwrite error from destroying the last backup.
+    const created = await storage.createFile({
       bucketId: BUCKET_ID,
       fileId: ID.unique(),
       file: new File([buffer], name, { type: "application/octet-stream" }),
       folder
     });
+    if (old && old.$id !== created.$id) await removeFile(old);
+    return created;
   } catch (error) {
     log("file_upload_error", {
       name,
@@ -337,20 +351,33 @@ export function scheduleSessionBackup() {
 
 export async function restoreSession() {
   if (!storage) return false;
-  const remote = await findFile("session", "session.tar.gz");
-  if (!remote) return false;
-
-  const temp = path.join(os.tmpdir(), `axynera-restore-${process.pid}.tar.gz`);
   try {
-    const data = await storage.getFileDownload({ bucketId: BUCKET_ID, fileId: remote.$id });
-    fs.writeFileSync(temp, Buffer.from(data));
-    fs.mkdirSync(SESSION_DIR, { recursive: true });
-    const result = spawnSync("tar", ["-xzf", temp, "-C", SESSION_DIR], { encoding: "utf8" });
-    if (result.status !== 0) throw new Error(result.stderr || "gagal restore session");
-    log("session_restored");
-    return true;
-  } finally {
-    try { fs.rmSync(temp, { force: true }); } catch {}
+    log("session_restore_start", { bucketId: BUCKET_ID });
+    const remote = await findFile("session", "session.tar.gz");
+    if (!remote) {
+      log("session_restore_missing", { name: "session.tar.gz" });
+      return false;
+    }
+
+    const temp = path.join(os.tmpdir(), `axynera-restore-${process.pid}.tar.gz`);
+    try {
+      const data = await storage.getFileDownload({ bucketId: BUCKET_ID, fileId: remote.$id });
+      fs.writeFileSync(temp, Buffer.from(data));
+      fs.mkdirSync(SESSION_DIR, { recursive: true });
+      const result = spawnSync("tar", ["-xzf", temp, "-C", SESSION_DIR], { encoding: "utf8" });
+      if (result.status !== 0) throw new Error(result.stderr || "gagal restore session");
+      log("session_restored", { fileId: remote.$id, bytes: fs.statSync(temp).size });
+      return true;
+    } finally {
+      try { fs.rmSync(temp, { force: true }); } catch {}
+    }
+  } catch (error) {
+    log("session_restore_error", {
+      message: error?.message || String(error),
+      code: error?.code ?? error?.response?.status ?? null,
+      type: error?.type ?? null
+    });
+    return false;
   }
 }
 
