@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { uploadTemporaryBuffer, deleteTemporaryFile } from "../appwrite-storage.js";
 
 const SESSION_DIR = path.resolve(process.env.WA_SESSION_DIR || "/tmp/axynera-wa-session");
 const PENDING_FILE = path.resolve(
@@ -233,7 +234,7 @@ export default async function stickerPlugin({ sock, message, media, log }) {
     savePending();
     try {
       const buffer = fs.readFileSync(item.filePath);
-      await createSticker(jid, message, buffer, item.animated, sock, log);
+      await createSticker(jid, message, buffer, item.animated, sock, log, item.appwriteFileId);
     } finally {
       removePendingMedia(item);
     }
@@ -261,8 +262,14 @@ export default async function stickerPlugin({ sock, message, media, log }) {
       const buffer = await downloadMedia(info.target);
       const filePath = pendingPath(jid);
       fs.writeFileSync(filePath, buffer);
+      const remote = await uploadTemporaryBuffer(
+        buffer,
+        `sticker-${Date.now()}-${jid}.bin`,
+        Number(process.env.APPWRITE_TEMP_TTL_MS || 15 * 60 * 1000)
+      ).catch(() => null);
       pending[jid] = {
         filePath,
+        appwriteFileId: remote?.id || null,
         animated: info.animated,
         createdAt: Date.now()
       };
@@ -292,10 +299,19 @@ async function createStickerFromTarget(jid, message, info, sock, log) {
   }
 }
 
-async function createSticker(jid, message, buffer, animated, sock, log) {
+async function createSticker(jid, message, buffer, animated, sock, log, sourceRemoteId = null) {
   const started = Date.now();
   let placeholder = null;
+  let remoteId = sourceRemoteId;
   try {
+    if (!remoteId) {
+      const remote = await uploadTemporaryBuffer(
+        buffer,
+        `sticker-source-${Date.now()}.bin`,
+        Number(process.env.APPWRITE_TEMP_TTL_MS || 15 * 60 * 1000)
+      ).catch(() => null);
+      remoteId = remote?.id || null;
+    }
     placeholder = await sock.sendMessage(jid, {
       text: animated ? "🎬 Mengubah video/GIF menjadi sticker..." : "🖼️ Membuat sticker..."
     }, { quoted: message }).catch(() => null);
