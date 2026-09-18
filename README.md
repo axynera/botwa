@@ -264,3 +264,23 @@ wa-plugins/
 ---
 
 **Axynera WhatsApp Bot + Nera AI** 🚀
+
+
+## Appwrite persistent storage
+
+The bot can keep WhatsApp session data and runtime plugins outside the Koyeb container using Appwrite Storage. Uploaded user media used by the bot is stored temporarily in Appwrite and automatically expires.
+
+Set these Koyeb environment variables:
+- `APPWRITE_ENDPOINT`
+- `APPWRITE_PROJECT_ID`
+- `APPWRITE_API_KEY`
+- `APPWRITE_BUCKET_ID` (default: `botwa`)
+
+The server API key needs Storage bucket/file read, write, and delete permissions. The bot creates the bucket automatically when it does not exist.
+
+Appwrite folders:
+- `plugins/` — runtime plugins; Appwrite is the source of truth.
+- `session/` — Baileys session backup.
+- `temp/` — temporary user media; automatically cleaned up.
+
+After the first initialization, upload or remove `.js`/`.mjs` plugins directly in the Appwrite `plugins/` folder. The bot periodically syncs them without rebuilding the Docker image.
