@@ -291,6 +291,8 @@ async function backupSessionNow() {
   }
 }
 
+export async function backupSessionNowPublic() { await backupSessionNow(); }
+
 export function scheduleSessionBackup() {
   if (!storage) return;
   clearTimeout(sessionSyncTimer);
