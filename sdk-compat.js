@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-simport http from "node:http";
+import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { getWhatsAppState, restartWhatsApp, logoutWhatsApp } from "./whatsapp-bot.js";
@@ -148,7 +148,31 @@ async function load(){try{const d=await api('/api/users');list.innerHTML=(d.user
 </script></body></html>\`;
 }
 function consolePage() {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Axynera Live Console</title><style>${css()}.console{background:#020805;border:1px solid #1d3b2a;border-radius:14px;min-height:520px;max-height:72vh;overflow:auto;padding:12px;font-family:ui-monospace,monospace}.row{padding:9px 0;border-bottom:1px solid #13261b;white-space:pre-wrap;word-break:break-word}.t{color:#789787}.in{color:#8bd5ff}.out{color:#a7f3d0}.ai{color:#f9d58b}.err{color:#ff9b9b}</style></head><body><div class="wrap">${nav()}<h1>Live Console</h1><div class="top"><button class="danger" onclick="clearLogs()">Bersihkan</button><span id="st" class="muted"></span></div><div id="console" class="console"></div></div><script>let last=0;function saveKey(){localStorage.setItem(K,key.value);last=0;console.innerHTML='';poll()}function esc(s){return String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}function cls(t){return t==='wa_in'?'in':t==='wa_out'?'out':t.startsWith('ai_')?'ai':t.includes('error')?'err':''}async function poll(){try{const r=await fetch('/api/console?after='+last,{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Gagal');for(const x of d.logs||[]){last=Math.max(last,x.id);const div=document.createElement('div');div.className='row '+cls(x.type);div.innerHTML='<span class="t">['+new Date(x.time).toLocaleTimeString()+']</span> '+esc(x.type)+' '+esc(x.contact||x.jid||x.model||'')+'\n'+esc(x.text||x.error||x.status||x.body||'');console.appendChild(div)}if((d.logs||[]).length)console.scrollTop=console.scrollHeight;st.textContent='LIVE · '+new Date().toLocaleTimeString()}catch(e){st.textContent=e.message}}async function clearLogs(){await fetch('/api/console',{method:'DELETE'});last=0;console.innerHTML=''}poll();setInterval(poll,1000)</script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Live Console</title><style>${css()}.consoleHead{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}.terminal{background:#020805;border:1px solid #1d3b2a;border-radius:16px;min-height:520px;max-height:72vh;overflow:auto;padding:14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;box-shadow:inset 0 0 30px #0006}.row{padding:8px 4px;border-bottom:1px solid #102218;white-space:pre-wrap;word-break:break-word;line-height:1.5}.time{color:#607b6a}.ping{color:#7ee2a5}.chat{color:#8bd5ff}.reply{color:#f5d58a}.system{color:#a7b9ad}.err{color:#ff9b9b}.toolbar{display:flex;gap:8px;flex-wrap:wrap}.liveDot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#36e58a;box-shadow:0 0 10px #36e58a;margin-right:6px}.paused .liveDot{background:#dcae45;box-shadow:none}@media(max-width:600px){body{padding:10px}.terminal{min-height:460px;font-size:12px}}</style></head><body><div class="wrap">${nav()}<div class="panel"><div class="consoleHead"><div><h1 style="margin:0">Live Console</h1><div class="muted">Read-only activity monitor · tidak bisa menjalankan command</div></div><div class="toolbar"><button class="secondary" id="pauseBtn" onclick="togglePause()">Pause</button><button class="danger" onclick="clearLogs()">Bersihkan layar</button></div></div><div id="terminal" class="terminal"></div><div id="st" class="muted" style="margin-top:10px"><span class="liveDot"></span>LIVE</div></div></div><script>
+let last=0,paused=false,autoScroll=true;
+function esc(s){return String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+function format(x){
+ const time=new Date(x.time).toLocaleTimeString();
+ if(x.type==='ping_success') return '<span class="time">['+time+']</span> <span class="ping">Ping x berhasil ✓</span>';
+ if(x.type==='wa_in') return '<span class="time">['+time+']</span> <span class="chat">'+esc(x.contact||x.jid||'User')+': '+esc(x.text||'[media]')+'</span>';
+ if(x.type==='ai_response'||x.type==='wa_out') return '<span class="time">['+time+']</span> <span class="reply">'+esc(x.aiName||'Axynity')+': '+esc(x.text||x.body||'[response]')+'</span>';
+ if(x.type.includes('error')) return '<span class="time">['+time+']</span> <span class="err">'+esc(x.text||x.error||x.type)+'</span>';
+ const detail=x.text||x.error||x.status||x.body||'';
+ return '<span class="time">['+time+']</span> <span class="system">'+esc(detail||x.type)+'</span>';
+}
+function append(x){const div=document.createElement('div');div.className='row';div.innerHTML=format(x);terminal.appendChild(div)}
+async function poll(){
+ if(paused){st.innerHTML='<span class="liveDot"></span>PAUSED';return}
+ try{const r=await fetch('/api/console?after='+last,{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Gagal');
+ for(const x of d.logs||[]){last=Math.max(last,x.id);append(x)}
+ if((d.logs||[]).length)terminal.scrollTop=terminal.scrollHeight;
+ st.innerHTML='<span class="liveDot"></span>LIVE · '+new Date().toLocaleTimeString();
+ }catch(e){st.textContent=e.message}
+}
+function togglePause(){paused=!paused;pauseBtn.textContent=paused?'Resume':'Pause';document.body.classList.toggle('paused',paused);poll()}
+async function clearLogs(){await fetch('/api/console',{method:'DELETE'});last=0;terminal.innerHTML=''}
+poll();setInterval(poll,1000);
+</script></body></html>`;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -158,7 +182,9 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true, service: "axynera-botwa", status: getWhatsAppState().status, uptime: process.uptime(), ts: Date.now() });
     }
     if (req.method === "GET" && p === "/ping") {
-      res.writeHead(204, { "cache-control": "no-store" });
+      const wa = getWhatsAppState();
+      const entry = (await import("./live-console.js")).pushConsoleLog("ping_success", { status: wa.status });
+      res.writeHead(204, { "cache-control": "no-store", "x-console-event": String(entry.id) });
       return res.end();
     }
     if (req.method === "POST" && p === "/login") {
