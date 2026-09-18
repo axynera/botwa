@@ -13,6 +13,7 @@ import {
   initAppwriteStorage,
   startAppwriteSync,
   scheduleSessionBackup,
+  backupSessionNowPublic,
   uploadTemporaryBuffer,
   isAppwriteEnabled,
   upsertUserFromMessage
@@ -385,6 +386,10 @@ async function connectWhatsApp() {
     const { state: authState, saveCreds: persistCreds } = await useMultiFileAuthState(SESSION_DIR);
     const saveCreds = async () => {
       await persistCreds();
+      if (isAppwriteEnabled()) {
+        try { await backupSessionNowPublic(); }
+        catch (error) { pushConsoleLog("session_backup_error", { error: error?.message || String(error) }); }
+      }
       scheduleSessionBackup();
     };
     const { version } = await fetchLatestBaileysVersion();
