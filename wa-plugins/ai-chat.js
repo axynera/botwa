@@ -475,19 +475,32 @@ export default async function axynityPlugin({ sock, message, media, log }) {
     saveStore();
   }
 
-  // REAKSI EMOSI DINAMIS (SMART SENTIMENT REACTION)
-  if (/\b(sedih|nangis|kecewa|gagal|sakit|patah hati|galau|duka)\b/i.test(lower)) {
-    await sock.sendMessage(jid, { react: { text: "😢", key: message.key } }).catch(() => {});
-  } else if (/\b(marah|kesel|benci|anjing|babi|kontol|tai|bangsat|goblok|emosi)\b/i.test(lower)) {
-    await sock.sendMessage(jid, { react: { text: "😡", key: message.key } }).catch(() => {});
-  } else if (/\b(kaget|anjir|astaga|woy|serius|demi apa|anjay)\b/i.test(lower)) {
-    await sock.sendMessage(jid, { react: { text: "😲", key: message.key } }).catch(() => {});
-  } else if (/\b(wkwk|hahaha|lol|lucu|ngakak|gokil)\b/i.test(lower)) {
-    await sock.sendMessage(jid, { react: { text: "😂", key: message.key } }).catch(() => {});
-  } else if (/\b(keren|mantap|good|hebat|pro|solusi|juara)\b/i.test(lower)) {
-    await sock.sendMessage(jid, { react: { text: "🔥", key: message.key } }).catch(() => {});
-  } else if (/\b(terima kasih|makasih|thanks|thx|tq)\b/i.test(lower)) {
-    await sock.sendMessage(jid, { react: { text: "👍", key: message.key } }).catch(() => {});
+  // SMART AI REACTION: AI membaca konteks chat dan memilih reaksi yang paling sesuai.
+  // Tidak memakai keyword/regex untuk menentukan emosi.
+  const reactionEnabled = String(process.env.AXYNITY_AUTO_REACTION || "true").toLowerCase() !== "false";
+  if (reactionEnabled && raw) {
+    try {
+      const reactionPrompt = [{
+        role: "user",
+        content: `Tentukan SATU reaksi emoji yang paling cocok untuk pesan WhatsApp berikut berdasarkan konteks, emosi, maksud, dan suasana percakapan. Jangan menjawab pesan. Pilih tepat satu dari: 👍 😂 😢 😡 😲 🔥 😭 🤣 😎 🥺 😅 🤔 ❤️ 💔 🎉 🙏 👀 🤯 atau NONE jika tidak perlu reaksi. Output HARUS hanya satu emoji tersebut atau NONE, tanpa teks lain.\n\nPesan: ${raw}`
+      }];
+      const detected = await askAxynityStream({
+        messages: reactionPrompt,
+        log,
+        jid,
+        sessionId: "auto-reaction",
+        hasImage: false
+      });
+      const value = String(detected || "").trim();
+      const allowed = ["👍","😂","😢","😡","😲","🔥","😭","🤣","😎","🥺","😅","🤔","❤️","💔","🎉","🙏","👀","🤯"];
+      const emoji = allowed.find((item) => value === item || value.includes(item));
+      if (emoji && !/NONE/i.test(value)) {
+        await sock.sendMessage(jid, { react: { text: emoji, key: message.key } }).catch(() => {});
+        log?.("ai_reaction", { jid, emoji });
+      }
+    } catch (error) {
+      log?.("ai_reaction_error", { jid, error: error.message });
+    }
   }
 
   // DETEKSI LID BARU DAN NOTIFIKASI OWNER
