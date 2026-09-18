@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
+import { File } from "node:buffer";
 import { spawnSync } from "node:child_process";
 import { Client, Storage, Databases, ID, Query } from "node-appwrite";
 
@@ -57,14 +58,61 @@ async function removeFile(file) {
 }
 
 async function uploadBuffer(buffer, name, folder) {
+  if (!storage) throw new Error("Appwrite Storage belum siap.");
+  if (!Buffer.isBuffer(buffer)) buffer = Buffer.from(buffer);
   const old = await findFile(folder, name);
   if (old) await removeFile(old);
-  return storage.createFile({
-    bucketId: BUCKET_ID,
-    fileId: ID.unique(),
-    file: new File([buffer], name),
-    folder
-  });
+  try {
+    return await storage.createFile({
+      bucketId: BUCKET_ID,
+      fileId: ID.unique(),
+      file: new File([buffer], name, { type: "application/octet-stream" }),
+      folder
+    });
+  } catch (error) {
+    log("file_upload_error", {
+      name,
+      folder,
+      bytes: buffer.length,
+      message: error?.message || String(error),
+      code: error?.code ?? error?.response?.status ?? null,
+      type: error?.type ?? null
+    });
+    throw error;
+  }
+}
+
+async function selfTestStorage() {
+  if (!storage) return false;
+  const name = "__axynera_storage_test_" + process.pid + "_" + Date.now() + ".txt";
+  const payload = Buffer.from("Axynera Appwrite Storage OK " + new Date().toISOString() + "\n", "utf8");
+  try {
+    log("storage_self_test_start", { bucketId: BUCKET_ID });
+    const file = await storage.createFile({
+      bucketId: BUCKET_ID,
+      fileId: ID.unique(),
+      file: new File([payload], name, { type: "text/plain" })
+    });
+    log("storage_self_test_ok", { fileId: file.$id, name: file.name, bytes: payload.length });
+    try {
+      await storage.deleteFile({ bucketId: BUCKET_ID, fileId: file.$id });
+      log("storage_self_test_cleanup_ok", { fileId: file.$id });
+    } catch (cleanupError) {
+      log("storage_self_test_cleanup_error", {
+        message: cleanupError?.message || String(cleanupError),
+        code: cleanupError?.code ?? cleanupError?.response?.status ?? null,
+        type: cleanupError?.type ?? null
+      });
+    }
+    return true;
+  } catch (error) {
+    log("storage_self_test_failed", {
+      message: error?.message || String(error),
+      code: error?.code ?? error?.response?.status ?? null,
+      type: error?.type ?? null
+    });
+    return false;
+  }
 }
 
 async function downloadTo(file, destination) {
@@ -170,6 +218,7 @@ export async function initAppwriteStorage() {
   storage = new Storage(client);
   databases = new Databases(client);
   await ensureBucket();
+  await selfTestStorage();
   await ensureAppwriteDatabase();
   fs.mkdirSync(PLUGIN_DIR, { recursive: true });
   fs.mkdirSync(SESSION_DIR, { recursive: true });
@@ -301,12 +350,7 @@ async function cleanupExpiredTemporaryFiles() {
 export async function uploadTemporaryBuffer(buffer, name, ttlMs = 15 * 60 * 1000) {
   if (!storage || !Buffer.isBuffer(buffer) || !buffer.length) return null;
   const safe = String(name || "upload.bin").replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120);
-  const file = await storage.createFile({
-    bucketId: BUCKET_ID,
-    fileId: ID.unique(),
-    file: new File([buffer], safe),
-    folder: "temp"
-  });
+  const file = await uploadBuffer(buffer, safe, "temp");
 
   const timer = setTimeout(async () => {
     try { await storage.deleteFile({ bucketId: BUCKET_ID, fileId: file.$id }); } catch {}
