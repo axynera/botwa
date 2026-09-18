@@ -3,16 +3,21 @@ import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { Client, Storage, ID, InputFile, Query } from "node-appwrite";
+import { Client, Storage, Databases, ID, InputFile, Query } from "node-appwrite";
 
 const ENDPOINT = String(process.env.APPWRITE_ENDPOINT || "").trim().replace(/\/$/, "");
 const PROJECT_ID = String(process.env.APPWRITE_PROJECT_ID || "").trim();
 const API_KEY = String(process.env.APPWRITE_API_KEY || "").trim();
 const BUCKET_ID = String(process.env.APPWRITE_BUCKET_ID || "botwa").trim();
+const DATABASE_ID = String(process.env.APPWRITE_DATABASE_ID || "botwa").trim();
+const USERS_COLLECTION_ID = String(process.env.APPWRITE_USERS_COLLECTION_ID || "users").trim();
+const MEMORIES_COLLECTION_ID = String(process.env.APPWRITE_MEMORIES_COLLECTION_ID || "memories").trim();
+const SESSIONS_COLLECTION_ID = String(process.env.APPWRITE_SESSIONS_COLLECTION_ID || "user_sessions").trim();
 const PLUGIN_DIR = path.resolve(process.env.WA_PLUGIN_DIR || "/data/axynera-wa-plugins");
 const SESSION_DIR = path.resolve(process.env.WA_SESSION_DIR || "/data/axynera-wa-session");
 
 let storage = null;
+let databases = null;
 let ready = false;
 let sessionSyncTimer = null;
 let syncingSession = false;
@@ -69,6 +74,29 @@ async function downloadTo(file, destination) {
   fs.writeFileSync(destination, buffer);
 }
 
+async function ensureDatabase() {
+  try { await databases.get({ databaseId: DATABASE_ID }); } catch (error) {
+    if (Number(error?.code || error?.response?.status || 0) !== 404) throw error;
+    await databases.create({ databaseId: DATABASE_ID, name: "Axynera BotWA" });
+    log("database_created", { databaseId: DATABASE_ID });
+  }
+}
+async function ensureCollection(id, name) {
+  try { await databases.getCollection({ databaseId: DATABASE_ID, collectionId: id }); } catch (error) {
+    if (Number(error?.code || error?.response?.status || 0) !== 404) throw error;
+    await databases.createCollection({ databaseId: DATABASE_ID, collectionId: id, name, permissions: [] });
+    log("collection_created", { id, name });
+  }
+}
+export async function ensureAppwriteDatabase() {
+  if (!databases) return false;
+  await ensureDatabase();
+  await ensureCollection(USERS_COLLECTION_ID, "Users");
+  await ensureCollection(MEMORIES_COLLECTION_ID, "Memories");
+  await ensureCollection(SESSIONS_COLLECTION_ID, "User Sessions");
+  return true;
+}
+
 async function ensureBucket() {
   try {
     await storage.getBucket({ bucketId: BUCKET_ID });
@@ -96,7 +124,9 @@ export async function initAppwriteStorage() {
     .setKey(API_KEY);
 
   storage = new Storage(client);
+  databases = new Databases(client);
   await ensureBucket();
+  await ensureAppwriteDatabase();
   fs.mkdirSync(PLUGIN_DIR, { recursive: true });
   fs.mkdirSync(SESSION_DIR, { recursive: true });
 
@@ -221,4 +251,43 @@ export async function startAppwriteSync() {
   appwriteSyncStarted = true;
   const interval = Math.max(15000, Number(process.env.APPWRITE_PLUGIN_SYNC_MS || 30000));
   setInterval(() => void syncPlugins().catch((e) => log("plugin_sync_error", { error: e.message })), interval).unref?.();
+}
+
+
+function getMessageUser(message) {
+  const raw = message?.key?.participant || message?.key?.remoteJid || "";
+  if (!/@lid$/i.test(String(raw))) return null;
+  return { lid: String(raw).replace(/@lid$/i, "").trim(), username: String(message?.pushName || "").trim() };
+}
+async function findUserByLid(lid) {
+  const result = await databases.listDocuments({ databaseId: DATABASE_ID, collectionId: USERS_COLLECTION_ID, queries: [Query.equal("lid", [String(lid)]), Query.limit(1)] });
+  return result.documents?.[0] || null;
+}
+export async function upsertUserFromMessage(message) {
+  if (!databases || !ready) return null;
+  const identity = getMessageUser(message);
+  if (!identity?.lid) return null;
+  const now = new Date().toISOString();
+  const user = await findUserByLid(identity.lid);
+  if (!user) return databases.createDocument({ databaseId: DATABASE_ID, collectionId: USERS_COLLECTION_ID, documentId: ID.unique(), data: { lid: identity.lid, username: identity.username || "", name: "", role: "user", status: "active", message_count: 1, first_seen: now, last_seen: now, created_at: now, updated_at: now } });
+  const patch = { last_seen: now, updated_at: now, message_count: Number(user.message_count || 0) + 1 };
+  if (identity.username && !user.username) patch.username = identity.username;
+  return databases.updateDocument({ databaseId: DATABASE_ID, collectionId: USERS_COLLECTION_ID, documentId: user.$id, data: patch });
+}
+export async function listUsers({ limit = 100, offset = 0 } = {}) {
+  if (!databases || !ready) return { documents: [], total: 0 };
+  return databases.listDocuments({ databaseId: DATABASE_ID, collectionId: USERS_COLLECTION_ID, queries: [Query.orderDesc("last_seen"), Query.limit(Math.min(100, Math.max(1, Number(limit)))), Query.offset(Math.max(0, Number(offset)))] });
+}
+export async function updateUser(id, data) {
+  if (!databases || !ready) throw new Error("Appwrite database belum siap.");
+  const allowed = {};
+  for (const key of ["username", "name", "role", "status"]) if (data?.[key] !== undefined) allowed[key] = String(data[key]);
+  allowed.updated_at = new Date().toISOString();
+  if (allowed.role && !["owner", "user"].includes(allowed.role)) throw new Error("Role harus owner atau user.");
+  if (allowed.status && !["active", "blocked"].includes(allowed.status)) throw new Error("Status tidak valid.");
+  return databases.updateDocument({ databaseId: DATABASE_ID, collectionId: USERS_COLLECTION_ID, documentId: id, data: allowed });
+}
+export async function deleteUser(id) {
+  if (!databases || !ready) throw new Error("Appwrite database belum siap.");
+  return databases.deleteDocument({ databaseId: DATABASE_ID, collectionId: USERS_COLLECTION_ID, documentId: id });
 }
