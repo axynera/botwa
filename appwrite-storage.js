@@ -144,7 +144,7 @@ export async function syncPlugins() {
 
 function createSessionArchive() {
   const temp = path.join(os.tmpdir(), `axynera-session-${process.pid}-${Date.now()}.tar.gz`);
-  const result = spawnSync("tar", ["-czf", temp, "-C", SESSION_DIR, "."], { encoding: "utf8" });
+  const result = spawnSync("tar", ["-czf", temp, "--exclude=./sticker-pending", "-C", SESSION_DIR, "."], { encoding: "utf8" });
   if (result.status !== 0) throw new Error(result.stderr || "gagal membuat arsip session");
   return temp;
 }
