@@ -176,6 +176,7 @@ export async function initAppwriteStorage() {
 
   await restoreSession();
   await syncPlugins();
+  await cleanupExpiredTemporaryFiles();
 
   ready = true;
   log("ready", { bucketId: BUCKET_ID });
@@ -279,6 +280,22 @@ export async function deletePluginFile(name) {
   const safe = String(name || "").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
   const file = await findFile("plugins", safe);
   if (file) await removeFile(file);
+}
+
+async function cleanupExpiredTemporaryFiles() {
+  if (!storage) return;
+  const ttl = Math.max(60000, Number(process.env.WA_MEDIA_TTL_MS || process.env.APPWRITE_TEMP_TTL_MS || 15 * 60 * 1000));
+  const cutoff = Date.now() - ttl;
+  try {
+    const files = await listFolder("temp");
+    for (const file of files) {
+      const created = Date.parse(file.$createdAt || file.$updatedAt || "");
+      if (Number.isFinite(created) && created < cutoff) await removeFile(file);
+    }
+    log("temp_cleanup", { ttlMs: ttl });
+  } catch (error) {
+    log("temp_cleanup_error", { error: error.message });
+  }
 }
 
 export async function uploadTemporaryBuffer(buffer, name, ttlMs = 15 * 60 * 1000) {
