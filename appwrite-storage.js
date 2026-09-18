@@ -235,7 +235,7 @@ async function backupSessionNow() {
     await uploadBuffer(buffer, "session.tar.gz", "session");
     log("session_synced", { bytes: buffer.length });
   } catch (error) {
-    log("session_sync_error", { error: error.message });
+    log("session_sync_error", { error: error?.message || String(error), code: error?.code || null, type: error?.type || null });
   } finally {
     if (archive) try { fs.rmSync(archive, { force: true }); } catch {}
     syncingSession = false;
