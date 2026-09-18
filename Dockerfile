@@ -3,7 +3,7 @@ FROM node:22-alpine
 WORKDIR /app
 
 # Baileys dapat membutuhkan git untuk dependency tertentu. Chromium/Puppeteer sudah tidak dipakai.
-RUN apk add --no-cache git ca-certificates
+RUN apk add --no-cache git ca-certificates ffmpeg
 
 COPY package.json ./
 RUN npm install --omit=dev --no-audit --no-fund
