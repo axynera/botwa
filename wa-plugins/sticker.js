@@ -6,7 +6,7 @@ const SESSION_DIR = path.resolve(process.env.WA_SESSION_DIR || "/tmp/axynera-wa-
 const PENDING_FILE = path.resolve(
   process.env.WA_STICKER_PENDING_FILE || path.join(SESSION_DIR, "sticker-pending.json")
 );
-const MAX_INPUT_BYTES = Math.max(512000, Number(process.env.WA_STICKER_MAX_INPUT_BYTES || 25 * 1024 * 1024));
+const MAX_INPUT_BYTES = Math.max(512000, Number(process.env.WA_STICKER_MAX_INPUT_BYTES || 12 * 1024 * 1024));
 const MAX_OUTPUT_BYTES = Math.max(150000, Number(process.env.WA_STICKER_MAX_OUTPUT_BYTES || 500000));
 const MAX_SECONDS = Math.max(1, Math.min(10, Number(process.env.WA_STICKER_MAX_SECONDS || 6)));
 
@@ -21,6 +21,22 @@ function loadPending() {
 }
 
 const pending = loadPending();
+const PENDING_MEDIA_DIR = path.join(SESSION_DIR, "sticker-pending");
+fs.mkdirSync(PENDING_MEDIA_DIR, { recursive: true });
+function pendingPath(jid) {
+  const safe = Buffer.from(String(jid)).toString("base64url").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80);
+  return path.join(PENDING_MEDIA_DIR, safe);
+}
+function removePendingMedia(item) {
+  try { if (item?.filePath) fs.rmSync(item.filePath, { force: true }); } catch {}
+}
+async function clearPending(jid) {
+  const item = pending[jid];
+  if (!item) return;
+  removePendingMedia(item);
+  delete pending[jid];
+  savePending();
+}
 
 function savePending() {
   fs.mkdirSync(path.dirname(PENDING_FILE), { recursive: true });
@@ -215,13 +231,17 @@ export default async function stickerPlugin({ sock, message, media, log }) {
     const item = pending[jid];
     delete pending[jid];
     savePending();
-    await createSticker(jid, message, Buffer.from(item.buffer, "base64"), item.animated, sock, log);
+    try {
+      const buffer = fs.readFileSync(item.filePath);
+      await createSticker(jid, message, buffer, item.animated, sock, log);
+    } finally {
+      removePendingMedia(item);
+    }
     return true;
   }
 
   if (pending[jid] && isCancel(text)) {
-    delete pending[jid];
-    savePending();
+    await clearPending(jid);
     await sock.sendMessage(jid, { text: "Oke, pembuatan sticker dibatalkan 👍" }, { quoted: message });
     return true;
   }
@@ -239,8 +259,10 @@ export default async function stickerPlugin({ sock, message, media, log }) {
   if (!text) {
     try {
       const buffer = await downloadMedia(info.target);
+      const filePath = pendingPath(jid);
+      fs.writeFileSync(filePath, buffer);
       pending[jid] = {
-        buffer: buffer.toString("base64"),
+        filePath,
         animated: info.animated,
         createdAt: Date.now()
       };
@@ -285,8 +307,10 @@ async function createSticker(jid, message, buffer, animated, sock, log) {
     await sock.sendMessage(jid, { sticker: webp }, { quoted: message });
 
     if (pending[jid]) {
+      const item = pending[jid];
       delete pending[jid];
       savePending();
+      removePendingMedia(item);
     }
 
     if (placeholder?.key) {
