@@ -35,7 +35,10 @@ ENV WA_STICKER_MAX_SECONDS=6
 ENV APPWRITE_BUCKET_ID=botwa
 ENV APPWRITE_PLUGIN_SYNC_MS=30000
 ENV APPWRITE_TEMP_TTL_MS=900000
-ENV WA_PLUGIN_DIR=/data/axynera-wa-plugins
+ENV WA_WEB_USERNAME=admin
+ENV WA_WEB_PASSWORD=change-this-password
+ENV WA_WEB_SESSION_TTL_MS=86400000
+ENV WA_PLUGIN_DIR=/app/plugins
 
 # Default Koyeb/runtime configuration.
 # Secrets (WA_ADMIN_KEY and NERA_AI_API_KEY) remain external environment variables.
