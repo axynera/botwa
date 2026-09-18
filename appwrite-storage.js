@@ -16,6 +16,7 @@ let storage = null;
 let ready = false;
 let sessionSyncTimer = null;
 let syncingSession = false;
+let appwriteSyncStarted = false;
 
 export function isAppwriteEnabled() {
   return Boolean(ENDPOINT && PROJECT_ID && API_KEY && BUCKET_ID);
@@ -216,7 +217,8 @@ export async function deleteTemporaryFile(id) {
 }
 
 export async function startAppwriteSync() {
-  if (!storage) return;
+  if (!storage || appwriteSyncStarted) return;
+  appwriteSyncStarted = true;
   const interval = Math.max(15000, Number(process.env.APPWRITE_PLUGIN_SYNC_MS || 30000));
   setInterval(() => void syncPlugins().catch((e) => log("plugin_sync_error", { error: e.message })), interval).unref?.();
 }
