@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node start.js",
     "dev": "node --watch start.js",
-    "check": "node --check start.js && node --check live-console.js && node --check sdk-compat.js && node --check whatsapp-bot.js && node --check wa-plugins/ping.js && node --check wa-plugins/sticker.js && node --check wa-plugins/ai-chat.js && node --check wa-plugins/nera-diagnostic.js"
+    "check": "node --check appwrite-storage.js && node --check start.js && node --check live-console.js && node --check sdk-compat.js && node --check whatsapp-bot.js && node --check wa-plugins/ping.js && node --check wa-plugins/sticker.js && node --check wa-plugins/ai-chat.js && node --check wa-plugins/nera-diagnostic.js"
   },
   "engines": {
     "node": ">=22"
