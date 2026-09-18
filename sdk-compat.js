@@ -251,8 +251,15 @@ const server = http.createServer(async (req, res) => {
         const { safe, target } = pluginPath(body.name);
         const content = String(body.content ?? "");
         if (!content.trim()) return send(res, 400, { error: "Kode plugin kosong." });
+        if (isAppwriteEnabled()) {
+          try {
+            await uploadPluginFile(content, safe);
+          } catch (error) {
+            console.error("[plugins] Appwrite upload failed:", error);
+            return send(res, 502, { error: `Gagal menyimpan plugin ke Appwrite: ${error?.message || error}` });
+          }
+        }
         fs.writeFileSync(target, content, "utf8");
-        if (isAppwriteEnabled()) await uploadPluginFile(content, safe);
         return send(res, 200, { ok: true, name: safe, size: Buffer.byteLength(content), storage: isAppwriteEnabled() ? "appwrite" : "local" });
       }
     }
