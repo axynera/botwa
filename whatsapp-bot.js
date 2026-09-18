@@ -431,7 +431,11 @@ async function connectWhatsApp() {
           });
         }
 
-        if (!fromMe) {\n          try { await upsertUserFromMessage(message); } catch (error) {\n            pushConsoleLog("user_db_error", { jid, error: error.message });\n          }\n        }\n\n        const media = await downloadIncomingImage(message);
+        if (!fromMe) {
+          void upsertUserFromMessage(message).catch((error) => {
+            pushConsoleLog("user_db_error", { jid, error: error.message });
+          });
+        }\n\n        const media = await downloadIncomingImage(message);
         await dispatchPlugins(message, media);
       }
     });
