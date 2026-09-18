@@ -197,6 +197,23 @@ function startLiveProfileTimers() {
   aboutTimer.unref?.();
 }
 
+async function cleanupOldMedia() {
+  try {
+    fs.mkdirSync(MEDIA_DIR, { recursive: true });
+    const ttl = Math.max(60000, Number(process.env.WA_MEDIA_TTL_MS || process.env.APPWRITE_TEMP_TTL_MS || 15 * 60 * 1000));
+    const cutoff = Date.now() - ttl;
+    for (const name of fs.readdirSync(MEDIA_DIR)) {
+      const file = path.join(MEDIA_DIR, name);
+      try {
+        const stat = fs.statSync(file);
+        if (stat.isFile() && stat.mtimeMs < cutoff) fs.rmSync(file, { force: true });
+      } catch {}
+    }
+  } catch (error) {
+    pushConsoleLog("media_cleanup_error", { error: error.message });
+  }
+}
+
 async function downloadIncomingImage(message) {
   if (!AUTO_DOWNLOAD_IMAGES || message?.key?.fromMe || !message?.message?.imageMessage) return null;
   try {
@@ -208,8 +225,9 @@ async function downloadIncomingImage(message) {
     const filename = `${Date.now()}-${jid}-${id}${imageExtension(message)}`;
     const filePath = path.join(MEDIA_DIR, filename);
     fs.writeFileSync(filePath, buffer);
+    const ttl = Math.max(60000, Number(process.env.WA_MEDIA_TTL_MS || process.env.APPWRITE_TEMP_TTL_MS || 15 * 60 * 1000));
     const remote = isAppwriteEnabled()
-      ? await uploadTemporaryBuffer(buffer, filename, Number(process.env.APPWRITE_TEMP_TTL_MS || 15 * 60 * 1000)).catch(() => null)
+      ? await uploadTemporaryBuffer(buffer, filename, ttl).catch(() => null)
       : null;
     const media = {
       type: "image",
@@ -220,7 +238,9 @@ async function downloadIncomingImage(message) {
       appwriteFileId: remote?.id || null,
       caption: message.message.imageMessage.caption || ""
     };
-    pushConsoleLog("media_download", { jid: message?.key?.remoteJid || "", ...media });
+    const timer = setTimeout(() => { try { fs.rmSync(filePath, { force: true }); } catch {} }, ttl);
+    timer.unref?.();
+    pushConsoleLog("media_download", { jid: message?.key?.remoteJid || "", ...media, ttlMs: ttl });
     return media;
   } catch (error) {
     pushConsoleLog("media_download_error", { jid: message?.key?.remoteJid || "", error: error.message });
@@ -347,6 +367,7 @@ async function connectWhatsApp() {
     await teardownSocket("reconnect");
     fs.mkdirSync(SESSION_DIR, { recursive: true });
     fs.mkdirSync(MEDIA_DIR, { recursive: true });
+    await cleanupOldMedia();
     try {
       await initAppwriteStorage();
       await startAppwriteSync();
