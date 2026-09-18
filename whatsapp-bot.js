@@ -495,6 +495,16 @@ async function connectWhatsApp() {
         });
         if (!activeSince) { activeSince = Date.now(); saveActiveSince(); }
         startLiveProfileTimers();
+        // Pastikan sesi terbaru segera tersimpan setelah pairing/login benar-benar
+        // berhasil. creds.update biasanya cukup, tetapi event ini menjadi fallback
+        // penting untuk hosting ephemeral seperti Koyeb Free.
+        if (isAppwriteEnabled()) {
+          setTimeout(() => {
+            void backupSessionNowPublic().catch((error) => {
+              pushConsoleLog("session_backup_error", { error: error?.message || String(error) });
+            });
+          }, 1500).unref?.();
+        }
         pushConsoleLog("connection", { status: "connected", text: "WhatsApp terhubung" });
       }
       if (connection === "close") {
