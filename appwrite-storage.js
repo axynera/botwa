@@ -13,7 +13,7 @@ const DATABASE_ID = String(process.env.APPWRITE_DATABASE_ID || "botwa").trim();
 const USERS_COLLECTION_ID = String(process.env.APPWRITE_USERS_COLLECTION_ID || "users").trim();
 const MEMORIES_COLLECTION_ID = String(process.env.APPWRITE_MEMORIES_COLLECTION_ID || "memories").trim();
 const SESSIONS_COLLECTION_ID = String(process.env.APPWRITE_SESSIONS_COLLECTION_ID || "user_sessions").trim();
-const PLUGIN_DIR = path.resolve(process.env.WA_PLUGIN_DIR || "/data/axynera-wa-plugins");
+const PLUGIN_DIR = path.resolve(process.env.WA_PLUGIN_DIR || "./plugins");
 const SESSION_DIR = path.resolve(process.env.WA_SESSION_DIR || "/data/axynera-wa-session");
 
 let storage = null;
