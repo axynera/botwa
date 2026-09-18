@@ -403,7 +403,7 @@ async function connectWhatsApp() {
         if (type !== "notify") continue;
 
         if (AUTO_READ && !fromMe && message?.key) {
-          await newSock.readMessages([message.key]).catch((error) => {
+          void newSock.readMessages([message.key]).catch((error) => {
             pushConsoleLog("read_error", { jid, error: error.message });
           });
         }
