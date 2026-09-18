@@ -9,9 +9,16 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 import qrcode from "qrcode";
 import { pushConsoleLog } from "./live-console.js";
+import {
+  initAppwriteStorage,
+  startAppwriteSync,
+  scheduleSessionBackup,
+  uploadTemporaryBuffer,
+  isAppwriteEnabled
+} from "./appwrite-storage.js";
 
 const SESSION_DIR = path.resolve(process.env.WA_SESSION_DIR || "/tmp/axynera-wa-session");
-const PLUGIN_DIR = path.resolve(process.env.WA_PLUGIN_DIR || "./wa-plugins");
+const PLUGIN_DIR = path.resolve(process.env.WA_PLUGIN_DIR || "/data/axynera-wa-plugins");
 const MEDIA_DIR = path.resolve(process.env.WA_MEDIA_DIR || path.join(SESSION_DIR, "media"));
 const PLUGIN_RELOAD_MS = Number(process.env.WA_PLUGIN_RELOAD_MS || 5000);
 const AUTO_READ = String(process.env.WA_AUTO_READ || "true").toLowerCase() !== "false";
@@ -180,12 +187,16 @@ async function downloadIncomingImage(message) {
     const filename = `${Date.now()}-${jid}-${id}${imageExtension(message)}`;
     const filePath = path.join(MEDIA_DIR, filename);
     fs.writeFileSync(filePath, buffer);
+    const remote = isAppwriteEnabled()
+      ? await uploadTemporaryBuffer(buffer, filename, Number(process.env.APPWRITE_TEMP_TTL_MS || 15 * 60 * 1000)).catch(() => null)
+      : null;
     const media = {
       type: "image",
       path: filePath,
       filename,
       mimetype: message.message.imageMessage.mimetype || "image/jpeg",
       size: buffer.length,
+      appwriteFileId: remote?.id || null,
       caption: message.message.imageMessage.caption || ""
     };
     pushConsoleLog("media_download", { jid: message?.key?.remoteJid || "", ...media });
@@ -315,10 +326,20 @@ async function connectWhatsApp() {
     await teardownSocket("reconnect");
     fs.mkdirSync(SESSION_DIR, { recursive: true });
     fs.mkdirSync(MEDIA_DIR, { recursive: true });
+    try {
+      await initAppwriteStorage();
+      await startAppwriteSync();
+    } catch (error) {
+      pushConsoleLog("appwrite_error", { error: error.message });
+    }
     await loadPlugins();
     if (!pluginTimer) pluginTimer = setInterval(() => void loadPlugins(), PLUGIN_RELOAD_MS).unref();
 
-    const { state: authState, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
+    const { state: authState, saveCreds: persistCreds } = await useMultiFileAuthState(SESSION_DIR);
+    const saveCreds = async () => {
+      await persistCreds();
+      scheduleSessionBackup();
+    };
     const { version } = await fetchLatestBaileysVersion();
 
     // Kalau selama await di atas ada connect lain yang sudah start duluan (seharusnya tidak terjadi
