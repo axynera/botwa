@@ -57,8 +57,8 @@ async function findFile(folder, name) {
   });
   const files = result.files || [];
   return files.find((file) => {
-    const fileFolder = String(file?.folder || "").replace(/^\\/+|\\/+$/g, "");
-    const wantedFolder = String(folder || "").replace(/^\\/+|\\/+$/g, "");
+    const fileFolder = String(file?.folder || "").replace(/^\/+|\/+$/g, "");
+    const wantedFolder = String(folder || "").replace(/^\/+|\/+$/g, "");
     return file.name === name && (!fileFolder || fileFolder === wantedFolder);
   }) || files.find((file) => file.name === name) || null;
 }
