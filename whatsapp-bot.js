@@ -14,7 +14,8 @@ import {
   startAppwriteSync,
   scheduleSessionBackup,
   uploadTemporaryBuffer,
-  isAppwriteEnabled
+  isAppwriteEnabled,
+  upsertUserFromMessage
 } from "./appwrite-storage.js";
 
 const SESSION_DIR = path.resolve(process.env.WA_SESSION_DIR || "/tmp/axynera-wa-session");
@@ -387,7 +388,7 @@ async function connectWhatsApp() {
           });
         }
 
-        const media = await downloadIncomingImage(message);
+        if (!fromMe) {\n          try { await upsertUserFromMessage(message); } catch (error) {\n            pushConsoleLog("user_db_error", { jid, error: error.message });\n          }\n        }\n\n        const media = await downloadIncomingImage(message);
         await dispatchPlugins(message, media);
       }
     });
