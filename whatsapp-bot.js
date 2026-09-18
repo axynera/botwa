@@ -251,7 +251,11 @@ async function downloadIncomingImage(message) {
 async function loadPlugins() {
   try {
     fs.mkdirSync(PLUGIN_DIR, { recursive: true });
-    const files = fs.readdirSync(PLUGIN_DIR).filter((f) => f.endsWith(".js") || f.endsWith(".mjs")).sort((a, b) => {\n      if (a === "sticker.js") return -1;\n      if (b === "sticker.js") return 1;\n      return a.localeCompare(b);\n    });
+    const files = fs.readdirSync(PLUGIN_DIR).filter((f) => f.endsWith(".js") || f.endsWith(".mjs")).sort((a, b) => {
+      if (a === "sticker.js") return -1;
+      if (b === "sticker.js") return 1;
+      return a.localeCompare(b);
+    });
     const loaded = [];
     for (const file of files) {
       try {
@@ -435,7 +439,9 @@ async function connectWhatsApp() {
           void upsertUserFromMessage(message).catch((error) => {
             pushConsoleLog("user_db_error", { jid, error: error.message });
           });
-        }\n\n        const media = await downloadIncomingImage(message);
+        }
+
+        const media = await downloadIncomingImage(message);
         await dispatchPlugins(message, media);
       }
     });
