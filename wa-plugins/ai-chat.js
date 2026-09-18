@@ -574,7 +574,7 @@ ${raw}`
         }
 
         const commentMessages = [{ role: "user", content: stickerContent }];
-        const comment = await askAxynityStream({ messages: commentMessages, log, jid, sessionId: "sticker-comment", hasImage: true });
+        const comment = await askAxynityStream({ messages: commentMessages, log, jid, sessionId: "sticker-comment", hasImage: true, mode: session.mode || process.env.AXYNITY_DEFAULT_MODE || "cepat" });
 
         stopAnim();
 
@@ -852,7 +852,7 @@ ${raw}`
       return safeSend({ text: clean });
     };
 
-    const answer = await askAxynityStream({ messages, log, jid, sessionId: session.id, hasImage, onVisibleText: v => void render(v), onThinking: () => {} });
+    const answer = await askAxynityStream({ messages, log, jid, sessionId: session.id, hasImage, mode: session.mode || process.env.AXYNITY_DEFAULT_MODE || "cepat", onVisibleText: v => void render(v), onThinking: () => {} });
     const rendered = await render(answer, true);
     if (!rendered) throw new Error("Jawaban Axynity diterima, tetapi gagal dikirim ke WhatsApp (koneksi mungkin terputus).");
 
