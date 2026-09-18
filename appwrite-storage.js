@@ -81,19 +81,56 @@ async function ensureDatabase() {
     log("database_created", { databaseId: DATABASE_ID });
   }
 }
-async function ensureCollection(id, name) {
+async function ensureAttribute(collectionId, attr) {
+  const collection = await databases.getCollection({ databaseId: DATABASE_ID, collectionId });
+  if (collection.attributes?.some((a) => a.key === attr.key)) return;
+  try {
+    if (attr.type === "string") await databases.createStringAttribute({ databaseId: DATABASE_ID, collectionId, key: attr.key, size: attr.size || 255, required: Boolean(attr.required), default: attr.default ?? null });
+    if (attr.type === "integer") await databases.createIntegerAttribute({ databaseId: DATABASE_ID, collectionId, key: attr.key, required: Boolean(attr.required), min: attr.min, max: attr.max, default: attr.default ?? null });
+    if (attr.type === "datetime") await databases.createDatetimeAttribute({ databaseId: DATABASE_ID, collectionId, key: attr.key, required: Boolean(attr.required), default: attr.default ?? null });
+  } catch (error) {
+    if (Number(error?.code || 0) !== 409) throw error;
+  }
+}
+async function ensureCollection(id, name, attributes = []) {
   try { await databases.getCollection({ databaseId: DATABASE_ID, collectionId: id }); } catch (error) {
     if (Number(error?.code || error?.response?.status || 0) !== 404) throw error;
     await databases.createCollection({ databaseId: DATABASE_ID, collectionId: id, name, permissions: [] });
     log("collection_created", { id, name });
   }
+  for (const attr of attributes) await ensureAttribute(id, attr);
 }
 export async function ensureAppwriteDatabase() {
   if (!databases) return false;
   await ensureDatabase();
-  await ensureCollection(USERS_COLLECTION_ID, "Users");
-  await ensureCollection(MEMORIES_COLLECTION_ID, "Memories");
-  await ensureCollection(SESSIONS_COLLECTION_ID, "User Sessions");
+  await ensureCollection(USERS_COLLECTION_ID, "Users", [
+    { key: "lid", type: "string", size: 128, required: true },
+    { key: "username", type: "string", size: 255, required: false, default: "" },
+    { key: "name", type: "string", size: 255, required: false, default: "" },
+    { key: "role", type: "string", size: 20, required: true, default: "user" },
+    { key: "status", type: "string", size: 20, required: true, default: "active" },
+    { key: "message_count", type: "integer", required: true, default: 0, min: 0 },
+    { key: "first_seen", type: "datetime", required: true },
+    { key: "last_seen", type: "datetime", required: true },
+    { key: "created_at", type: "datetime", required: true },
+    { key: "updated_at", type: "datetime", required: true }
+  ]);
+  await ensureCollection(MEMORIES_COLLECTION_ID, "Memories", [
+    { key: "user_id", type: "string", size: 128, required: true },
+    { key: "memory", type: "string", size: 4000, required: true },
+    { key: "type", type: "string", size: 64, required: false, default: "fact" },
+    { key: "importance", type: "integer", required: false, default: 1, min: 1, max: 10 },
+    { key: "created_at", type: "datetime", required: true },
+    { key: "updated_at", type: "datetime", required: true }
+  ]);
+  await ensureCollection(SESSIONS_COLLECTION_ID, "User Sessions", [
+    { key: "user_id", type: "string", size: 128, required: true },
+    { key: "current_command", type: "string", size: 255, required: false, default: "" },
+    { key: "pending_action", type: "string", size: 4000, required: false, default: "" },
+    { key: "pending_media", type: "string", size: 4000, required: false, default: "" },
+    { key: "expires_at", type: "datetime", required: false },
+    { key: "updated_at", type: "datetime", required: true }
+  ]);
   return true;
 }
 
