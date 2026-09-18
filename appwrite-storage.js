@@ -268,11 +268,21 @@ export async function initAppwriteStorage() {
   databases = new Databases(client);
   await ensureBucket();
   await selfTestStorage();
-  await ensureAppwriteDatabase();
+
+  // Restore the WhatsApp auth archive before Baileys creates/reads auth state.
+  // Database setup must not block session restoration on ephemeral hosts.
   fs.mkdirSync(PLUGIN_DIR, { recursive: true });
   fs.mkdirSync(SESSION_DIR, { recursive: true });
+  log("session_restore_prepare", { sessionDir: SESSION_DIR });
+  const restored = await restoreSession();
+  log("session_restore_result", { restored });
 
-  await restoreSession();
+  try {
+    await ensureAppwriteDatabase();
+  } catch (error) {
+    log("database_init_error", { error: error?.message || String(error), code: error?.code ?? error?.response?.status ?? null });
+  }
+
   await syncPlugins();
   await cleanupExpiredTemporaryFiles();
 
