@@ -3,7 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { Client, Storage, Databases, ID, InputFile, Query } from "node-appwrite";
+import { Client, Storage, Databases, ID, Query } from "node-appwrite";
 
 const ENDPOINT = String(process.env.APPWRITE_ENDPOINT || "").trim().replace(/\/$/, "");
 const PROJECT_ID = String(process.env.APPWRITE_PROJECT_ID || "").trim();
@@ -62,7 +62,7 @@ async function uploadBuffer(buffer, name, folder) {
   return storage.createFile({
     bucketId: BUCKET_ID,
     fileId: ID.unique(),
-    file: InputFile.fromBuffer(buffer, name),
+    file: new File([buffer], name),
     folder
   });
 }
