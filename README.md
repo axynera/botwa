@@ -320,3 +320,15 @@ Web Admin menyediakan halaman yang terhubung langsung ke runtime:
 Semua halaman admin dilindungi login `WA_WEB_USERNAME` + `WA_WEB_PASSWORD`. Jangan membuka panel admin tanpa autentikasi saat deployment public.
 
 Jika `WA_PLUGIN_DIR` tidak diatur, folder plugin default adalah `./plugins`. Jika Appwrite aktif, folder tersebut disinkronkan dengan Appwrite Storage dan Appwrite tetap menjadi source of truth setelah sinkronisasi pertama.
+
+
+## ⚙️ Default deployment ENV
+
+Konfigurasi umum sudah memiliki default bawaan di image, jadi deployment Koyeb tidak perlu mengisi puluhan ENV. Untuk deployment public, ubah minimal **WA_WEB_PASSWORD** di Koyeb. Appwrite tetap opsional; jika `APPWRITE_ENDPOINT`, `APPWRITE_PROJECT_ID`, dan `APPWRITE_API_KEY` tidak diisi, bot menggunakan storage lokal.
+
+Default penting:
+- Web username: `admin`
+- Web password: `change-this-password` — **wajib diganti sebelum public**
+- Plugin directory: `/app/plugins`
+- Port: `8000` (Koyeb dapat meng-override lewat `PORT`)
+- Nera AI: sudah memiliki base URL dan model default
