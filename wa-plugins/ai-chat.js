@@ -480,9 +480,19 @@ export default async function axynityPlugin({ sock, message, media, log }) {
   const reactionEnabled = String(process.env.AXYNITY_AUTO_REACTION || "true").toLowerCase() !== "false";
   if (reactionEnabled && raw) {
     try {
+      const recentContext = (session.messages || [])
+        .slice(-6)
+        .map((item) => `${item.role}: ${typeof item.content === "string" ? item.content : "[media]"}`)
+        .join("\n");
       const reactionPrompt = [{
         role: "user",
-        content: `Tentukan SATU reaksi emoji yang paling cocok untuk pesan WhatsApp berikut berdasarkan konteks, emosi, maksud, dan suasana percakapan. Jangan menjawab pesan. Pilih tepat satu dari: 👍 😂 😢 😡 😲 🔥 😭 🤣 😎 🥺 😅 🤔 ❤️ 💔 🎉 🙏 👀 🤯 atau NONE jika tidak perlu reaksi. Output HARUS hanya satu emoji tersebut atau NONE, tanpa teks lain.\n\nPesan: ${raw}`
+        content: `Tentukan SATU reaksi emoji yang paling cocok untuk pesan WhatsApp terbaru berdasarkan konteks percakapan, emosi, maksud, dan suasana. Jangan menjawab pesan. Pilih tepat satu dari: 👍 😂 😢 😡 😲 🔥 😭 🤣 😎 🥺 😅 🤔 ❤️ 💔 🎉 🙏 👀 🤯 atau NONE jika tidak perlu reaksi. Output HARUS hanya satu emoji tersebut atau NONE, tanpa teks lain.
+
+Konteks percakapan terbaru:
+${recentContext || "[belum ada konteks]"}
+
+Pesan terbaru:
+${raw}`
       }];
       const detected = await askAxynityStream({
         messages: reactionPrompt,
