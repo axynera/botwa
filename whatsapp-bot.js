@@ -19,7 +19,7 @@ import {
   upsertUserFromMessage
 } from "./appwrite-storage.js";
 
-const SESSION_DIR = path.resolve(process.env.WA_SESSION_DIR || "/tmp/axynera-wa-session");
+// Keep the default session path identical to appwrite-storage.js so restored\n// archives are read by Baileys on ephemeral hosts such as Koyeb.\nconst SESSION_DIR = path.resolve(process.env.WA_SESSION_DIR || "/data/axynera-wa-session");
 const PLUGIN_DIR = path.resolve(process.env.WA_PLUGIN_DIR || "/data/axynera-wa-plugins");
 const MEDIA_DIR = path.resolve(process.env.WA_MEDIA_DIR || path.join(SESSION_DIR, "media"));
 const PLUGIN_RELOAD_MS = Number(process.env.WA_PLUGIN_RELOAD_MS || 5000);
