@@ -9,7 +9,7 @@ import { Client, Storage, Databases, ID, Query } from "node-appwrite";
 const ENDPOINT = String(process.env.APPWRITE_ENDPOINT || "").trim().replace(/\/$/, "");
 const PROJECT_ID = String(process.env.APPWRITE_PROJECT_ID || "").trim();
 const API_KEY = String(process.env.APPWRITE_API_KEY || "").trim();
-const BUCKET_ID = String(process.env.APPWRITE_BUCKET_ID || "botwa").trim();
+let BUCKET_ID = String(process.env.APPWRITE_BUCKET_ID || "botwa").trim();
 const DATABASE_ID = String(process.env.APPWRITE_DATABASE_ID || "botwa").trim();
 const USERS_COLLECTION_ID = String(process.env.APPWRITE_USERS_COLLECTION_ID || "users").trim();
 const MEMORIES_COLLECTION_ID = String(process.env.APPWRITE_MEMORIES_COLLECTION_ID || "memories").trim();
@@ -192,17 +192,52 @@ export async function ensureAppwriteDatabase() {
 async function ensureBucket() {
   try {
     await storage.getBucket({ bucketId: BUCKET_ID });
+    log("bucket_found", { bucketId: BUCKET_ID });
+    return;
   } catch (error) {
     const code = Number(error?.code || error?.response?.status || 0);
     if (code !== 404) throw error;
+  }
+
+  // Appwrite's console may create a bucket with a generated ID while the
+  // human-readable name is "botwa". If APPWRITE_BUCKET_ID points to that
+  // name/old ID, resolve the real bucket ID before creating anything.
+  try {
+    const result = await storage.listBuckets({
+      queries: [Query.equal("name", ["botwa"]), Query.limit(10)]
+    });
+    const existing = result.buckets?.[0];
+    if (existing?.$id) {
+      BUCKET_ID = existing.$id;
+      log("bucket_resolved_by_name", { name: existing.name, bucketId: BUCKET_ID });
+      return;
+    }
+  } catch (error) {
+    log("bucket_lookup_error", {
+      requestedBucketId: BUCKET_ID,
+      message: error?.message || String(error),
+      code: error?.code ?? error?.response?.status ?? null,
+      type: error?.type ?? null
+    });
+  }
+
+  try {
     await storage.createBucket({
       bucketId: BUCKET_ID,
-      name: "Axynera BotWA",
+      name: "botwa",
       enabled: true,
       fileSecurity: false,
       encryption: true
     });
     log("bucket_created", { bucketId: BUCKET_ID });
+  } catch (error) {
+    log("bucket_init_error", {
+      requestedBucketId: BUCKET_ID,
+      message: error?.message || String(error),
+      code: error?.code ?? error?.response?.status ?? null,
+      type: error?.type ?? null
+    });
+    throw error;
   }
 }
 
