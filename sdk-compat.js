@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { getWhatsAppState, restartWhatsApp, logoutWhatsApp } from "./whatsapp-bot.js";
 import { getConsoleLogs, clearConsoleLogs } from "./live-console.js";
+import { listUsers, updateUser, deleteUser } from "./appwrite-storage.js";
 
 const PORT = Number(process.env.PORT || 8000);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -98,7 +99,7 @@ async function askNeraForPlugin({ action, prompt, code = "", name = "plugin.js" 
   return action === "render" ? stripCodeFence(answer) : stripCodeFence(answer);
 }
 
-function nav() { return `<nav><a href="/wa">WhatsApp</a><a href="/plugins">Plugins</a><a href="/console">Live Console</a></nav>`; }
+function nav() { return `<nav><a href="/wa">WhatsApp</a><a href="/users">Users</a><a href="/plugins">Plugins</a><a href="/console">Live Console</a></nav>`; }
 function css() {
   return `*{box-sizing:border-box}body{margin:0;background:#07110c;color:#edfff4;font:14px system-ui;padding:18px}a{color:#6cf0a0;text-decoration:none}nav{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px}.wrap{max-width:1200px;margin:auto}.panel{background:#0d1d14;border:1px solid #244b36;border-radius:16px;padding:16px}.top{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}input,textarea,button{font:inherit}input,textarea{background:#08150e;color:#effff5;border:1px solid #244b36;border-radius:10px;padding:10px}button,.btn{border:0;border-radius:10px;padding:10px 13px;font-weight:700;cursor:pointer;background:#25d366;color:#05210f}.secondary{background:#254e38;color:#ecfff4}.danger{background:#5a2028;color:#ffe1e5}.muted{color:#94b3a1}.msg{min-height:22px;margin:8px 0}.ok{color:#8ff0b4}.bad{color:#ff9b9b}`;
 }
@@ -123,6 +124,17 @@ async function aiGenerate(action){try{setMsg(action==='render'?'Nera sedang memb
 newPlugin();loadList();
 </script></body></html>`;
 }
+function usersPage() {
+  return \`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Axynera Users</title><style>\${css()}.table{display:grid;gap:10px}.user{display:grid;grid-template-columns:minmax(180px,1fr) 180px 110px 130px 90px;gap:10px;align-items:center;background:#0d1d14;border:1px solid #244b36;border-radius:14px;padding:12px}.user input,.user select{width:100%}@media(max-width:800px){.user{grid-template-columns:1fr}.actions{display:flex;gap:8px}}</style></head><body><div class="wrap">\${nav()}<div class="panel"><div class="top"><h1 style="margin:0">👥 Users</h1><button onclick="load()">Refresh</button><span id="msg" class="muted"></span></div><p class="muted">LID diambil otomatis dari WhatsApp. Owner dapat mengubah nama, username, role, dan status.</p><div id="list" class="table"></div></div></div><script>
+const K='axynera_wa_admin_key'; let key=localStorage.getItem(K)||''; if(!key){key=prompt('WA_ADMIN_KEY')||'';localStorage.setItem(K,key)}
+function h(){return {'x-admin-key':key,'content-type':'application/json'}}
+function esc(v){return String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+async function api(u,o={}){const r=await fetch(u,{...o,headers:{...h(),...(o.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Request gagal');return d}
+async function save(id){const row=document.querySelector('[data-id="'+CSS.escape(id)+'"]');const body={username:row.querySelector('.username').value,name:row.querySelector('.name').value,role:row.querySelector('.role').value,status:row.querySelector('.status').value};await api('/api/users/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify(body)});load()}
+async function removeUser(id){if(!confirm('Hapus user ini?'))return;await api('/api/users/'+encodeURIComponent(id),{method:'DELETE'});load()}
+async function load(){try{const d=await api('/api/users');list.innerHTML=(d.users||[]).map(u=>\`<div class="user" data-id="\${esc(u.$id)}"><div><b>\${esc(u.name||u.username||'Tanpa nama')}</b><div class="muted">LID: \${esc(u.lid)}</div><div class="muted">Pesan: \${Number(u.message_count||0)} · \${esc(u.last_seen||'-')}</div></div><input class="username" value="\${esc(u.username)}" placeholder="Username"><input class="name" value="\${esc(u.name)}" placeholder="Nama"><select class="role"><option value="user" \${u.role==='user'?'selected':''}>user</option><option value="owner" \${u.role==='owner'?'selected':''}>owner</option></select><select class="status"><option value="active" \${u.status==='active'?'selected':''}>active</option><option value="blocked" \${u.status==='blocked'?'selected':''}>blocked</option></select><div class="actions"><button onclick="save('\${esc(u.$id)}')">Simpan</button><button class="danger" onclick="removeUser('\${esc(u.$id)}')">Hapus</button></div></div>\`).join('')||'<div class="muted">Belum ada user. User muncul otomatis setelah chat masuk.</div>';msg.textContent='Total: '+(d.total||0)}catch(e){msg.textContent=e.message;msg.className='bad'}}load();setInterval(load,10000)
+</script></body></html>\`;
+}
 function consolePage() {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Axynera Live Console</title><style>${css()}.console{background:#020805;border:1px solid #1d3b2a;border-radius:14px;min-height:520px;max-height:72vh;overflow:auto;padding:12px;font-family:ui-monospace,monospace}.row{padding:9px 0;border-bottom:1px solid #13261b;white-space:pre-wrap;word-break:break-word}.t{color:#789787}.in{color:#8bd5ff}.out{color:#a7f3d0}.ai{color:#f9d58b}.err{color:#ff9b9b}</style></head><body><div class="wrap">${nav()}<h1>Live Console</h1><div class="top"><input id="key" type="password" placeholder="WA_ADMIN_KEY"><button onclick="saveKey()">Hubungkan</button><button class="danger" onclick="clearLogs()">Bersihkan</button><span id="st" class="muted"></span></div><div id="console" class="console"></div></div><script>const K='axynera_wa_admin_key';key.value=localStorage.getItem(K)||'';let last=0;function saveKey(){localStorage.setItem(K,key.value);last=0;console.innerHTML='';poll()}function esc(s){return String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}function cls(t){return t==='wa_in'?'in':t==='wa_out'?'out':t.startsWith('ai_')?'ai':t.includes('error')?'err':''}async function poll(){if(!key.value)return st.textContent='Masukkan admin key';try{const r=await fetch('/api/console?after='+last,{headers:{'x-admin-key':key.value},cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Gagal');for(const x of d.logs||[]){last=Math.max(last,x.id);const div=document.createElement('div');div.className='row '+cls(x.type);div.innerHTML='<span class="t">['+new Date(x.time).toLocaleTimeString()+']</span> '+esc(x.type)+' '+esc(x.contact||x.jid||x.model||'')+'\n'+esc(x.text||x.error||x.status||x.body||'');console.appendChild(div)}if((d.logs||[]).length)console.scrollTop=console.scrollHeight;st.textContent='LIVE · '+new Date().toLocaleTimeString()}catch(e){st.textContent=e.message}}async function clearLogs(){await fetch('/api/console',{method:'DELETE',headers:{'x-admin-key':key.value}});last=0;console.innerHTML=''}poll();setInterval(poll,1000)</script></body></html>`;
 }
@@ -133,10 +145,31 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && p === "/") return sendHtml(res, `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>${css()}</style></head><body><div class="wrap">${nav()}<div class="panel"><h1>Axynera WhatsApp Bot</h1><p>Baileys + Nera SSE + memory + image-ready + Plugin Studio.</p></div></div></body></html>`);
     if (req.method === "GET" && p === "/wa") return sendHtml(res, whatsappPage());
     if (req.method === "GET" && p === "/plugins") return sendHtml(res, pluginManagerPage());
+    if (req.method === "GET" && p === "/users") return sendHtml(res, usersPage());
     if (req.method === "GET" && p === "/console") return sendHtml(res, consolePage());
     if (req.method === "GET" && p === "/wa/status") return send(res, 200, getWhatsAppState());
     if (req.method === "POST" && p === "/wa/restart") return send(res, 200, await restartWhatsApp());
     if (req.method === "POST" && p === "/wa/logout") return send(res, 200, await logoutWhatsApp());
+
+    if (p === "/api/users") {
+      if (!requireAdmin(req, res, url)) return;
+      if (req.method !== "GET") return send(res, 405, { error: "Method tidak didukung." });
+      const result = await listUsers();
+      return send(res, 200, { users: result.documents || [], total: Number(result.total || 0) });
+    }
+    if (p.startsWith("/api/users/")) {
+      if (!requireAdmin(req, res, url)) return;
+      const id = decodeURIComponent(p.slice("/api/users/".length));
+      if (req.method === "PATCH") {
+        const body = await readJson(req);
+        const user = await updateUser(id, body);
+        return send(res, 200, { ok: true, user });
+      }
+      if (req.method === "DELETE") {
+        await deleteUser(id);
+        return send(res, 200, { ok: true });
+      }
+    }
 
     if (p === "/api/console") {
       if (!requireAdmin(req, res, url)) return;
