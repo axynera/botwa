@@ -31,14 +31,14 @@ function getContextInfo(m) {
 const MAX_TURNS = Math.max(2, Number(process.env.AXYNITY_MEMORY_TURNS || 20));
 const STREAM_EDIT_MS = Math.max(700, Number(process.env.AXYNITY_STREAM_EDIT_MS || 1200));
 const THINK_ANIMATION_MS = Math.max(700, Number(process.env.AXYNITY_THINK_ANIMATION_MS || 900));
-const MAX_IMAGE_BYTES = Math.max(256000, Number(process.env.AXYNITY_MAX_IMAGE_BYTES || 15 * 1024 * 1024));
+const MAX_IMAGE_BYTES = Math.max(256000, Number(process.env.AXYNITY_MAX_IMAGE_BYTES || process.env.NERA_AI_MAX_IMAGE_BYTES || 8 * 1024 * 1024));
 const SESSION_DIR = path.resolve(process.env.WA_SESSION_DIR || "/tmp/axynera-wa-session");
 const MEMORY_FILE = path.resolve(process.env.AXYNITY_MEMORY_FILE || path.join(SESSION_DIR, "axynity-memory.json"));
 
 const TEXT_TIMEOUT_MS = Number(process.env.AXYNITY_TIMEOUT_MS || 120000);
 const IMAGE_TIMEOUT_MS = Number(process.env.AXYNITY_IMAGE_TIMEOUT_MS || 180000);
 
-const AXYNITY_API_KEY = String(process.env.AXYNITY_API_KEY || "").trim();
+const AXYNITY_API_KEY = String(process.env.AXYNITY_API_KEY || process.env.NERA_AI_API_KEY || "").trim();
 const OWNER_JID = String(process.env.OWNER_JID || "").trim();
 
 if (!AXYNITY_API_KEY) {
