@@ -38,6 +38,8 @@ WA_AUTO_READ=true
 WA_AI_AUTO_REPLY=true
 WA_SESSION_DIR=/data/axynera-wa-session
 WA_PLUGIN_RELOAD_MS=5000
+# Folder plugin runtime/web upload
+# WA_PLUGIN_DIR=./plugins
 WA_CONSOLE_MAX_LOGS=500
 
 # Media
@@ -247,9 +249,9 @@ start.js               bootstrap Axynera session path
 sdk-compat.js          web server, QR, Plugin Manager, Live Console, health/uptime
 whatsapp-bot.js        Baileys, auto-read, presence, media, reconnect, plugin loader
 live-console.js        ring buffer Live Console
-plugins/               folder untuk plugin yang akan di-upload
+plugins/               folder plugin; Web Plugin Studio upload masuk ke sini
 └── README.md
-wa-plugins/             runtime plugin directory
+wa-plugins/             legacy/runtime plugin directory
 ├── ping.js
 └── ai-chat.js           Nera SSE + mode + memory per LID/JID
 ```
@@ -304,3 +306,17 @@ Appwrite folders:
 - `temp/` — temporary user media; automatically cleaned up.
 
 After the first initialization, upload or remove `.js`/`.mjs` plugins directly in the Appwrite `plugins/` folder. The bot periodically syncs them without rebuilding the Docker image.
+
+
+## 🌐 Web Admin siap public
+
+Web Admin menyediakan halaman yang terhubung langsung ke runtime:
+
+- `/wa` — status, QR, restart, dan logout WhatsApp.
+- `/plugins` — lihat, upload, buat, edit, hapus, dan preview plugin.
+- `/users` — ambil daftar user dari Appwrite, edit username/nama/role/status, dan hapus user.
+- `/console` — Live Console read-only.
+
+Semua halaman admin dilindungi login `WA_WEB_USERNAME` + `WA_WEB_PASSWORD`. Jangan membuka panel admin tanpa autentikasi saat deployment public.
+
+Jika `WA_PLUGIN_DIR` tidak diatur, folder plugin default adalah `./plugins`. Jika Appwrite aktif, folder tersebut disinkronkan dengan Appwrite Storage dan Appwrite tetap menjadi source of truth setelah sinkronisasi pertama.
