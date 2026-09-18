@@ -355,5 +355,7 @@ async function createSticker(jid, message, buffer, animated, sock, log, sourceRe
         text: `❌ Gagal membuat sticker: ${e.message}`
       }, { quoted: message }).catch(() => {});
     }
+  } finally {
+    if (remoteId) await deleteTemporaryFile(remoteId).catch(() => {});
   }
 }
